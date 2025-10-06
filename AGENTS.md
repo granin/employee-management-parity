@@ -32,9 +32,10 @@ npm run build
 npm run preview -- --host 127.0.0.1 --port 4174
 ```
 Open the printed URL and ensure:
-- Employee list loads and drawer opens on row click.
-- Quick add wizard completes and adds a mock employee.
-- Toolbar modals (tags/import/export) open and show expected copy.
+- Employee list loads; row click toggles selection and the toolbar icons enable/disable correctly.
+- Opening the edit drawer via the employee name button works and reflects the selected record.
+- Quick add drawer (логин/пароль) adds a draft employee and immediately opens the edit drawer for follow-up fields.
+- Toolbar modals (теги/импорт/экспорт) open and show expected copy.
 
 ---
 ## References & Docs

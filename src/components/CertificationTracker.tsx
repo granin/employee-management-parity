@@ -351,6 +351,9 @@ const CertificationTracker: React.FC<CertificationTrackerProps> = ({
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-6">
           <div className="mb-4 lg:mb-0">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Управление сертификациями</h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-xs font-medium mb-2 uppercase tracking-wide">
+              Демонстрационный модуль
+            </span>
             <p className="text-gray-600">
               Отслеживание обучения, сертификаций и соответствия требованиям
             </p>

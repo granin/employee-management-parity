@@ -1,19 +1,14 @@
 // /Users/m/Documents/wfm/competitor/naumen/employee-management/src/components/EmployeeListContainer.tsx
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Employee, EmployeeFilters, EmployeeStatus, Team } from '../types/employee';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import EmployeeEditDrawer from './EmployeeEditDrawer';
-
-// ========================
-// FOUNDATION COMPONENT 1: Employee List Container
-// Based on successful patterns from Chat 6 (PersonalSchedule.tsx style)
-// ========================
+import { Employee, EmployeeStatus, EmployeeFilters } from '../types/employee';
 
 interface EmployeeListContainerProps {
   employees: Employee[];
   onEmployeesChange: (updater: (prev: Employee[]) => Employee[]) => void;
-  onAddEmployee: () => void;
-  focusEmployeeId?: string | null;
+  onOpenQuickAdd: () => void;
+  focusEmployeeId: string | null;
 }
 
 const STATUS_LABELS: Record<EmployeeStatus, string> = {
@@ -21,7 +16,7 @@ const STATUS_LABELS: Record<EmployeeStatus, string> = {
   vacation: 'В отпуске',
   probation: 'Испытательный',
   inactive: 'Неактивен',
-  terminated: 'Уволен'
+  terminated: 'Уволен',
 };
 
 const STATUS_BADGE_CLASSES: Record<EmployeeStatus, string> = {
@@ -29,22 +24,105 @@ const STATUS_BADGE_CLASSES: Record<EmployeeStatus, string> = {
   vacation: 'bg-yellow-100 text-yellow-800',
   probation: 'bg-blue-100 text-blue-800',
   inactive: 'bg-gray-100 text-gray-800',
-  terminated: 'bg-red-100 text-red-800'
+  terminated: 'bg-red-100 text-red-800',
 };
 
-const COLUMN_STORAGE_KEY = 'employee-management:list-columns';
-const FILTER_STORAGE_KEY = 'employee-management:list-filters';
+const COLUMN_ORDER = [
+  { key: 'fio', label: 'Ф.И.О.' },
+  { key: 'position', label: 'Должность' },
+  { key: 'orgUnit', label: 'Точка оргструктуры' },
+  { key: 'team', label: 'Команда' },
+  { key: 'scheme', label: 'Схема работы' },
+  { key: 'hourNorm', label: 'Норма часов' },
+  { key: 'status', label: 'Статус' },
+  { key: 'hireDate', label: 'Дата найма' },
+] as const;
+
+type ColumnKey = typeof COLUMN_ORDER[number]['key'];
+
+const COLUMN_STORAGE_KEY = 'employee-list:columns';
+const FILTER_STORAGE_KEY = 'employee-list:filters';
+
+const createDefaultFilters = (): EmployeeFilters => ({
+  search: '',
+  team: '',
+  status: '',
+  skill: '',
+  position: '',
+  orgUnit: '',
+  sortBy: 'name',
+  sortOrder: 'asc',
+  showInactive: false,
+});
+
+const TAG_COLOR_PALETTE = ['#2563eb', '#1d4ed8', '#0ea5e9', '#0f766e', '#16a34a', '#d97706', '#db2777', '#7c3aed'];
+
+const getColorForTag = (tag: string) => {
+  let hash = 0;
+  for (let index = 0; index < tag.length; index += 1) {
+    hash = (hash << 5) - hash + tag.charCodeAt(index);
+    hash |= 0;
+  }
+  const paletteIndex = Math.abs(hash) % TAG_COLOR_PALETTE.length;
+  return TAG_COLOR_PALETTE[paletteIndex];
+};
+
+const IMPORT_OPTIONS = [
+  { id: 'employees', label: 'Сотрудника' },
+  { id: 'skills', label: 'Навыки' },
+  { id: 'vacations', label: 'Отпуска' },
+  { id: 'preferences', label: 'Смены предпочтений' },
+  { id: 'schemes', label: 'Схемы' },
+  { id: 'tags', label: 'Теги' },
+];
+
+const EXPORT_OPTIONS = [
+  { id: 'csv', label: 'CSV (текущие колонки)' },
+  { id: 'xlsx', label: 'XLSX (макет)' },
+];
 
 const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   employees,
   onEmployeesChange,
-  onAddEmployee,
-  focusEmployeeId = null
+  onOpenQuickAdd,
+  focusEmployeeId,
 }) => {
+  const [filters, setFilters] = useState<EmployeeFilters>(createDefaultFilters());
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
-  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(focusEmployeeId);
+  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isDrawerLoading, setIsDrawerLoading] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState({
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
+  const [tagCreationError, setTagCreationError] = useState<string | null>(null);
+  const [tagCatalog, setTagCatalog] = useState<Record<string, string>>({});
+  const [selectedTagNames, setSelectedTagNames] = useState<Set<string>>(new Set());
+  const [tagsMarkedForRemoval, setTagsMarkedForRemoval] = useState<Set<string>>(new Set());
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState<string>(TAG_COLOR_PALETTE[0]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<string | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
+  const [showImportMenu, setShowImportMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [importContext, setImportContext] = useState<string>('Сотрудника');
+  const [exportContext, setExportContext] = useState<string>('CSV (текущие колонки)');
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const importMenuAnchorRef = useRef<HTMLDivElement | null>(null);
+  const exportMenuAnchorRef = useRef<HTMLDivElement | null>(null);
+  const iconButtonClass = (disabled = false) =>
+    `h-10 w-10 flex items-center justify-center rounded-lg border text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+      disabled
+        ? 'border-gray-200 text-gray-300 bg-gray-50 cursor-not-allowed'
+        : 'border-gray-300 text-gray-600 hover:bg-gray-100'
+    }`;
+
+  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>({
     fio: true,
     position: true,
     orgUnit: true,
@@ -52,176 +130,168 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     scheme: true,
     hourNorm: true,
     status: true,
-    hireDate: true
+    hireDate: true,
   });
-  const [showTagManager, setShowTagManager] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  const [tagError, setTagError] = useState<string | null>(null);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [importSummary, setImportSummary] = useState<string | null>(null);
-  const hasLoadedColumns = useRef(false);
-  const hasLoadedFilters = useRef(false);
 
-  const buildDefaultFilters = useCallback((): EmployeeFilters => ({
-    search: '',
-    team: '',
-    status: '',
-    skill: '',
-    position: '',
-    orgUnit: '',
-    sortBy: 'name',
-    sortOrder: 'asc',
-    showInactive: false
-  }), []);
-
-  const [filters, setFilters] = useState<EmployeeFilters>(buildDefaultFilters);
-  const defaultFilters = useMemo(() => buildDefaultFilters(), [buildDefaultFilters]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
-  const [showFilters, setShowFilters] = useState(true);
-
+  // Load persisted column visibility
   useEffect(() => {
-    setActiveEmployeeId(focusEmployeeId ?? null);
-  }, [focusEmployeeId]);
-
-  const activeEmployee = useMemo(() => {
-    if (!activeEmployeeId) {
-      return null;
-    }
-    return employees.find(emp => emp.id === activeEmployeeId) ?? null;
-  }, [employees, activeEmployeeId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      hasLoadedColumns.current = true;
-      return;
-    }
-
-    try {
-      const storedColumns = window.localStorage.getItem(COLUMN_STORAGE_KEY);
-      if (storedColumns) {
-        const parsed = JSON.parse(storedColumns) as Partial<typeof columnVisibility>;
-        setColumnVisibility(prev => {
-          hasLoadedColumns.current = true;
-          return { ...prev, ...parsed };
-        });
-        return;
+    const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setColumnVisibility((prev) => ({ ...prev, ...parsed }));
+      } catch (err) {
+        console.warn('Failed to parse saved column visibility', err);
       }
-    } catch (storageError) {
-      console.warn('Не удалось восстановить настройки колонок', storageError);
     }
-
-    hasLoadedColumns.current = true;
   }, []);
 
+  // Persist column visibility
   useEffect(() => {
-    if (!hasLoadedColumns.current || typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnVisibility));
+    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnVisibility));
   }, [columnVisibility]);
 
+  // Load persisted filters
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      hasLoadedFilters.current = true;
-      return;
-    }
-
-    try {
-      const storedFilters = window.localStorage.getItem(FILTER_STORAGE_KEY);
-      if (storedFilters) {
-        const parsed = JSON.parse(storedFilters) as Partial<EmployeeFilters>;
-        setFilters(prev => {
-          hasLoadedFilters.current = true;
-          return { ...prev, ...parsed };
-        });
-        return;
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setFilters((prev) => ({ ...prev, ...parsed }));
+      } catch (err) {
+        console.warn('Failed to parse saved filters', err);
       }
-    } catch (storageError) {
-      console.warn('Не удалось восстановить фильтры сотрудников', storageError);
     }
-
-    hasLoadedFilters.current = true;
   }, []);
 
+  // Persist filters
   useEffect(() => {
-    if (!hasLoadedFilters.current || typeof window === 'undefined') {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
+
+  useEffect(() => {
+    if (employees.length === 0) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setIsInitialLoading(false), 250);
+    return () => window.clearTimeout(timeout);
+  }, [employees.length]);
+
+  useEffect(() => {
+    if (!showImportMenu && !showExportMenu) {
       return;
     }
 
-    window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
-  }, [filters]);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showImportMenu &&
+        importMenuAnchorRef.current &&
+        !importMenuAnchorRef.current.contains(event.target as Node)
+      ) {
+        setShowImportMenu(false);
+      }
+      if (
+        showExportMenu &&
+        exportMenuAnchorRef.current &&
+        !exportMenuAnchorRef.current.contains(event.target as Node)
+      ) {
+        setShowExportMenu(false);
+      }
+    };
 
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showImportMenu, showExportMenu]);
 
+  // Sync selection state
   useEffect(() => {
     setShowBulkActions(selectedEmployees.size > 0);
   }, [selectedEmployees]);
 
   useEffect(() => {
-    if (activeEmployeeId && !employees.some(emp => emp.id === activeEmployeeId)) {
-      setActiveEmployeeId(null);
-    }
-  }, [employees, activeEmployeeId]);
-
-  const columnOrder = useMemo(() => (
-    [
-      { key: 'fio' as const, label: 'Ф.И.О.' },
-      { key: 'position' as const, label: 'Должность' },
-      { key: 'orgUnit' as const, label: 'Точка оргструктуры' },
-      { key: 'team' as const, label: 'Команда' },
-      { key: 'scheme' as const, label: 'Схема работы' },
-      { key: 'hourNorm' as const, label: 'Норма часов' },
-      { key: 'status' as const, label: 'Статус' },
-      { key: 'hireDate' as const, label: 'Дата найма' }
-    ]
-  ), []);
-
-  const teamOptions = useMemo(() => {
-    const map = new Map<string, Team>();
-    employees.forEach(emp => {
-      map.set(emp.workInfo.team.id, emp.workInfo.team);
+    setSelectedEmployees((prev) => {
+      const next = new Set<string>();
+      employees.forEach((emp) => {
+        if (prev.has(emp.id)) {
+          next.add(emp.id);
+        }
+      });
+      return next;
     });
-    return Array.from(map.values());
   }, [employees]);
 
-  const positionOptions = useMemo(() => {
-    const set = new Set<string>();
-    employees.forEach(emp => set.add(emp.workInfo.position));
-    return Array.from(set.values());
-  }, [employees]);
+  useEffect(() => {
+    if (!focusEmployeeId) {
+      return;
+    }
+    const isPresent = employees.some((emp) => emp.id === focusEmployeeId);
+    if (!isPresent) {
+      return;
+    }
+    setActiveEmployeeId(focusEmployeeId);
+    setIsDrawerLoading(true);
+  }, [focusEmployeeId, employees]);
 
-  const orgUnitOptions = useMemo(() => {
-    const set = new Set<string>();
-    employees.forEach(emp => set.add(emp.orgPlacement.orgUnit));
-    return Array.from(set.values());
-  }, [employees]);
+  useEffect(() => {
+    if (!showTagManager) {
+      setTagError(null);
+      setTagCreationError(null);
+      setTagsMarkedForRemoval(new Set());
+      return;
+    }
 
-  const statusOptions = useMemo(() => (
-    ['active', 'probation', 'vacation', 'inactive', 'terminated'] as EmployeeStatus[]
-  ), []);
+    const catalog: Record<string, string> = {};
+    employees.forEach((emp) => {
+      emp.tags.forEach((tag) => {
+        if (!catalog[tag]) {
+          catalog[tag] = getColorForTag(tag);
+        }
+      });
+    });
+    setTagCatalog(catalog);
+
+    const selectedList = employees.filter((emp) => selectedEmployees.has(emp.id));
+    if (selectedList.length > 0) {
+      const [first, ...rest] = selectedList;
+      const commonTags = first.tags.filter((tag) => rest.every((emp) => emp.tags.includes(tag)));
+      setSelectedTagNames(new Set(commonTags));
+    } else {
+      setSelectedTagNames(new Set());
+    }
+
+    setTagsMarkedForRemoval(new Set());
+    setNewTagName('');
+    setNewTagColor(TAG_COLOR_PALETTE[0]);
+    setTagCreationError(null);
+    setTagError(null);
+  }, [showTagManager, employees, selectedEmployees]);
+
+  const handleFilterChange = <K extends keyof EmployeeFilters>(key: K, value: EmployeeFilters[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleResetFilters = () => {
+    setFilters(createDefaultFilters());
+  };
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter(employee => {
+    return employees.filter((employee) => {
       if (!filters.showInactive && employee.status === 'terminated') {
         return false;
       }
 
       const search = filters.search.trim().toLowerCase();
       if (search) {
-        const searchTarget = [
+        const target = [
           employee.personalInfo.lastName,
           employee.personalInfo.firstName,
           employee.personalInfo.middleName ?? '',
-          employee.workInfo.position,
           employee.credentials.wfmLogin,
-          ...employee.credentials.externalLogins
+          employee.workInfo.position,
         ]
           .join(' ')
           .toLowerCase();
-
-        if (!searchTarget.includes(search)) {
+        if (!target.includes(search)) {
           return false;
         }
       }
@@ -242,14 +312,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
         return false;
       }
 
-      if (filters.skill) {
-        const hasSkill = employee.skills.some(skill => skill.name === filters.skill) ||
-          employee.reserveSkills.some(skill => skill.name === filters.skill);
-        if (!hasSkill) {
-          return false;
-        }
-      }
-
       return true;
     });
   }, [employees, filters]);
@@ -257,8 +319,8 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   const sortedEmployees = useMemo(() => {
     const data = [...filteredEmployees];
     data.sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
+      let aValue: string | number = '';
+      let bValue: string | number = '';
 
       switch (filters.sortBy) {
         case 'position':
@@ -279,362 +341,366 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
           break;
         case 'name':
         default:
-          aValue = `${a.personalInfo.lastName} ${a.personalInfo.firstName} ${a.personalInfo.middleName ?? ''}`.trim();
-          bValue = `${b.personalInfo.lastName} ${b.personalInfo.firstName} ${b.personalInfo.middleName ?? ''}`.trim();
+          aValue = `${a.personalInfo.lastName} ${a.personalInfo.firstName}`.trim();
+          bValue = `${b.personalInfo.lastName} ${b.personalInfo.firstName}`.trim();
           break;
       }
 
-      let compare: number;
       if (typeof aValue === 'number' && typeof bValue === 'number') {
-        compare = (aValue as number) - (bValue as number);
-      } else {
-        compare = String(aValue).localeCompare(String(bValue), 'ru');
+        return filters.sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
       }
 
-      return filters.sortOrder === 'asc' ? compare : -compare;
+      return filters.sortOrder === 'asc'
+        ? String(aValue).localeCompare(String(bValue), 'ru')
+        : String(bValue).localeCompare(String(aValue), 'ru');
     });
 
     return data;
   }, [filteredEmployees, filters.sortBy, filters.sortOrder]);
 
-  useEffect(() => {
-    setSelectedEmployees(prev => {
-      const allowed = new Set(sortedEmployees.map(emp => emp.id));
-      const filtered = Array.from(prev).filter(id => allowed.has(id));
-      if (filtered.length === prev.size) {
-        return prev;
-      }
-      return new Set(filtered);
-    });
-  }, [sortedEmployees]);
-
-  useEffect(() => {
-    if (activeEmployeeId && !sortedEmployees.some(emp => emp.id === activeEmployeeId)) {
-      setActiveEmployeeId(null);
-    }
-  }, [activeEmployeeId, sortedEmployees]);
-
   const totalCount = employees.length;
   const visibleCount = sortedEmployees.length;
-  const hasActiveFilters = useMemo(() => {
-    return (
-      filters.search !== defaultFilters.search ||
-      filters.team !== defaultFilters.team ||
-      filters.status !== defaultFilters.status ||
-      filters.position !== defaultFilters.position ||
-      filters.orgUnit !== defaultFilters.orgUnit ||
-      filters.skill !== defaultFilters.skill ||
-      filters.showInactive !== defaultFilters.showInactive
-    );
-  }, [filters, defaultFilters]);
 
-  const filterChips = useMemo(() => {
-    const chips: Array<{ key: keyof EmployeeFilters; label: string; value?: string }> = [];
+  const activeEmployee = useMemo(() => {
+    return employees.find((emp) => emp.id === activeEmployeeId) ?? null;
+  }, [employees, activeEmployeeId]);
 
-    if (filters.search.trim()) {
-      chips.push({ key: 'search', label: 'Поиск', value: filters.search.trim() });
+  useEffect(() => {
+    if (!isDrawerLoading) {
+      return undefined;
     }
-
-    if (filters.team) {
-      const teamName = teamOptions.find(team => team.id === filters.team)?.name ?? filters.team;
-      chips.push({ key: 'team', label: 'Команда', value: teamName });
+    if (!activeEmployee) {
+      setIsDrawerLoading(false);
+      return undefined;
     }
+    const timer = window.setTimeout(() => setIsDrawerLoading(false), 200);
+    return () => window.clearTimeout(timer);
+  }, [activeEmployee, isDrawerLoading]);
 
-    if (filters.status) {
-      const statusKey = filters.status as EmployeeStatus;
-      chips.push({ key: 'status', label: 'Статус', value: STATUS_LABELS[statusKey] });
-    }
-
-    if (filters.position) {
-      chips.push({ key: 'position', label: 'Должность', value: filters.position });
-    }
-
-    if (filters.orgUnit) {
-      chips.push({ key: 'orgUnit', label: 'Точка оргструктуры', value: filters.orgUnit });
-    }
-
-    if (filters.showInactive) {
-      chips.push({ key: 'showInactive', label: 'Показывать уволенных' });
-    }
-
-    return chips;
-  }, [filters, teamOptions]);
-
-  const handleFilterChange = useCallback(<K extends keyof EmployeeFilters>(key: K, value: EmployeeFilters[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
-
-  const clearFilter = useCallback(<K extends keyof EmployeeFilters>(key: K) => {
-    setFilters(prev => ({ ...prev, [key]: defaultFilters[key] }));
-  }, [defaultFilters]);
-
-  const handleRemoveChip = useCallback((key: keyof EmployeeFilters) => {
-    clearFilter(key);
-  }, [clearFilter]);
-
-  const exportFilename = useMemo(() => `employees_export_${new Date().toISOString().slice(0, 10)}.csv`, []);
-
-  const handleResetFilters = useCallback(() => {
-    const reset = buildDefaultFilters();
-    setFilters(reset);
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(FILTER_STORAGE_KEY);
-    }
-  }, [buildDefaultFilters]);
-
-  const toggleEmployeeSelection = useCallback((employeeId: string) => {
-    setSelectedEmployees(prev => {
+  const toggleEmployeeSelection = (id: string) => {
+    setSelectedEmployees((prev) => {
       const next = new Set(prev);
-      if (next.has(employeeId)) {
-        next.delete(employeeId);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(employeeId);
+        next.add(id);
       }
       return next;
     });
-  }, []);
-
-  const handleSelectAll = useCallback(() => {
-    setSelectedEmployees(prev => {
-      if (sortedEmployees.length === 0) {
-        return new Set();
-      }
-
-      if (prev.size === sortedEmployees.length) {
-        return new Set();
-      }
-
-      return new Set(sortedEmployees.map(emp => emp.id));
-    });
-  }, [sortedEmployees]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedEmployees(new Set());
-  }, []);
-
-  const allSelected = sortedEmployees.length > 0 && selectedEmployees.size === sortedEmployees.length;
-
-  const formatDate = (date: Date) => date.toLocaleDateString('ru-RU');
-
-  const handleEmployeeUpdate = useCallback((updatedEmployee: Employee) => {
-    onEmployeesChange(prev => prev.map(emp => (emp.id === updatedEmployee.id ? updatedEmployee : emp)));
-    setActiveEmployeeId(updatedEmployee.id);
-  }, [onEmployeesChange]);
-
-  const toggleColumnVisibility = (key: keyof typeof columnVisibility) => {
-    setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const resetColumnVisibility = () => {
-    setColumnVisibility({
-      fio: true,
-      position: true,
-      orgUnit: true,
-      team: true,
-      scheme: true,
-      hourNorm: true,
-      status: true,
-      hireDate: true
-    });
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(COLUMN_STORAGE_KEY);
+  const handleSelectAll = () => {
+    if (selectedEmployees.size === visibleCount && visibleCount > 0) {
+      setSelectedEmployees(new Set());
+      return;
     }
+
+    setSelectedEmployees(new Set(sortedEmployees.map((emp) => emp.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedEmployees(new Set());
+    setTagsMarkedForRemoval(new Set());
+    setSelectedTagNames(new Set());
+  };
+
+  const handleDrawerClose = () => {
+    setActiveEmployeeId(null);
+    setIsDrawerLoading(false);
+  };
+
+  const handleDrawerSave = (updatedEmployee: Employee) => {
+    onEmployeesChange((prev) =>
+      prev.map((emp) => (emp.id === updatedEmployee.id ? { ...updatedEmployee } : emp))
+    );
+    setActiveEmployeeId(updatedEmployee.id);
+  };
+
+  const toggleColumn = (key: ColumnKey) => {
+    setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleApplyTags = () => {
-    const trimmed = tagInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean);
-
     if (selectedEmployees.size === 0) {
-      setTagError('Выберите хотя бы одного сотрудника');
+      setTagError('Выберите сотрудников, чтобы применить теги');
       return;
     }
 
-    if (trimmed.length === 0) {
-      setTagError('Укажите хотя бы один тег');
+    if (selectedTagNames.size === 0 && tagsMarkedForRemoval.size === 0) {
+      setTagError('Отметьте теги для добавления или удаления у выбранных сотрудников');
       return;
     }
 
-    onEmployeesChange(prev => prev.map(emp => {
-      if (!selectedEmployees.has(emp.id)) {
-        return emp;
-      }
+    const tagsToAdd = Array.from(selectedTagNames);
+    const removalSet = new Set(tagsMarkedForRemoval);
 
-      const updatedTags = Array.from(new Set([...emp.tags, ...trimmed]));
-      return {
-        ...emp,
-        tags: updatedTags,
-        metadata: {
-          ...emp.metadata,
-          updatedAt: new Date()
+    onEmployeesChange((prev) =>
+      prev.map((emp) => {
+        if (!selectedEmployees.has(emp.id)) {
+          return emp;
         }
-      };
-    }));
 
-    setTagInput('');
+        const updated = new Set(emp.tags);
+        removalSet.forEach((tag) => updated.delete(tag));
+        tagsToAdd.forEach((tag) => updated.add(tag));
+
+        return {
+          ...emp,
+          tags: Array.from(updated),
+          metadata: { ...emp.metadata, updatedAt: new Date(), lastModifiedBy: 'agent' },
+        };
+      })
+    );
+
     setTagError(null);
+    setTagsMarkedForRemoval(new Set());
+    setSelectedTagNames(new Set());
     setShowTagManager(false);
   };
 
-  const openImportModal = () => {
-    setImportSummary(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleCreateTag = () => {
+    const trimmed = newTagName.trim();
+    if (!trimmed) {
+      setTagCreationError('Введите название тега');
+      return;
     }
+    if (tagCatalog[trimmed]) {
+      setTagCreationError('Такой тег уже существует');
+      return;
+    }
+
+    setTagCatalog((prev) => ({ ...prev, [trimmed]: newTagColor }));
+    setSelectedTagNames((prev) => {
+      const next = new Set(prev);
+      next.add(trimmed);
+      return next;
+    });
+    setTagsMarkedForRemoval((prev) => {
+      const next = new Set(prev);
+      next.delete(trimmed);
+      return next;
+    });
+    setNewTagName('');
+    setTagCreationError(null);
+  };
+
+  const toggleTagSelection = (tag: string) => {
+    setSelectedTagNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  };
+
+  const toggleTagRemoval = (tag: string) => {
+    setTagsMarkedForRemoval((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteTagDefinition = (tag: string) => {
+    setTagCatalog((prev) => {
+      if (!prev[tag]) {
+        return prev;
+      }
+      const { [tag]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setSelectedTagNames((prev) => {
+      const next = new Set(prev);
+      next.delete(tag);
+      return next;
+    });
+    setTagsMarkedForRemoval((prev) => {
+      const next = new Set(prev);
+      next.delete(tag);
+      return next;
+    });
+
+    onEmployeesChange((prev) =>
+      prev.map((emp) => {
+        if (!emp.tags.includes(tag)) {
+          return emp;
+        }
+        return {
+          ...emp,
+          tags: emp.tags.filter((existing) => existing !== tag),
+          metadata: { ...emp.metadata, updatedAt: new Date(), lastModifiedBy: 'agent' },
+        };
+      })
+    );
+  };
+
+  const handleImportOptionSelect = (label: string) => {
+    setImportContext(label);
+    setShowImportMenu(false);
+    setImportFeedback(null);
     setShowImportModal(true);
   };
 
-  const closeImportModal = () => {
-    setImportSummary(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setShowImportModal(false);
+  const handleExportOptionSelect = (label: string) => {
+    setExportContext(label);
+    setShowExportMenu(false);
+    setExportFeedback(null);
+    setShowExportModal(true);
   };
 
-  const handleImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportClick = () => {
+    setImportFeedback(null);
+    importInputRef.current?.click();
+  };
+
+  const handleImportChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      setImportSummary(null);
-      return;
+    if (file) {
+      setImportFeedback(
+        `Файл «${file.name}» принят для раздела «${importContext}». Проверка и загрузка будут реализованы после подключения бэкенда.`
+      );
     }
-
-    const sizeKb = (file.size / 1024).toFixed(1);
-    setImportSummary(`${file.name} • ${sizeKb} КБ`);
   };
 
-  const triggerImportFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  const closeExportModal = () => {
-    setShowExportModal(false);
-  };
-
-  const handleDownloadCsv = useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const visibleColumns = columnOrder.filter(column => columnVisibility[column.key]);
-    const columnsForExport = visibleColumns.length > 0
-      ? visibleColumns
-      : ([{ key: 'fio' as const, label: 'Ф.И.О.' }] as Array<typeof columnOrder[number]>);
-    const headers = columnsForExport.map(column => column.label);
-
-    const formatCell = (employee: Employee, key: typeof columnOrder[number]['key']) => {
-      switch (key) {
-        case 'fio':
-          return `${employee.personalInfo.lastName} ${employee.personalInfo.firstName} ${employee.personalInfo.middleName ?? ''}`.trim();
-        case 'position':
-          return employee.workInfo.position;
-        case 'orgUnit':
-          return employee.orgPlacement.orgUnit;
-        case 'team':
-          return employee.workInfo.team.name;
-        case 'scheme':
-          return employee.orgPlacement.workScheme?.name ?? '';
-        case 'hourNorm':
-          return employee.orgPlacement.hourNorm ? `${employee.orgPlacement.hourNorm}` : '';
-        case 'status':
-          return STATUS_LABELS[employee.status];
-        case 'hireDate':
-          return formatDate(employee.workInfo.hireDate);
-        default:
-          return '';
-      }
-    };
-
-    const rows = sortedEmployees.map(employee =>
-      columnsForExport.map(column => formatCell(employee, column.key))
+  const handleExport = () => {
+    const columns = COLUMN_ORDER.filter((column) => columnVisibility[column.key]);
+    const header = columns.map((column) => column.label).join(',');
+    const rows = sortedEmployees.map((employee) =>
+      columns
+        .map((column) => {
+          switch (column.key) {
+            case 'fio':
+              return `"${employee.personalInfo.lastName} ${employee.personalInfo.firstName}"`;
+            case 'position':
+              return `"${employee.workInfo.position}"`;
+            case 'orgUnit':
+              return `"${employee.orgPlacement.orgUnit}"`;
+            case 'team':
+              return `"${employee.workInfo.team.name}"`;
+            case 'scheme':
+              return `"${employee.orgPlacement.workScheme?.name ?? ''}"`;
+            case 'hourNorm':
+              return String(employee.orgPlacement.hourNorm);
+            case 'status':
+              return STATUS_LABELS[employee.status];
+            case 'hireDate':
+              return employee.workInfo.hireDate.toLocaleDateString('ru-RU');
+            default:
+              return '';
+          }
+        })
+        .join(',')
     );
 
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const csvMatrix = [headers, ...rows];
-    const csvContent = csvMatrix
-      .map(row => row.map(cell => escapeCsv(String(cell ?? ''))).join(';'))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const filename = exportFilename;
-    const url = window.URL.createObjectURL(blob);
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = filename;
+    const normalizedContext = exportContext.replace(/[^а-яА-Яa-zA-Z0-9]+/g, '-').toLowerCase();
+    link.download = `employees_export_${normalizedContext}_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
+    setExportFeedback(`Экспорт завершен. Раздел: ${exportContext}. Файл сохранен в формате CSV.`);
+  };
 
-    setShowExportModal(false);
-  }, [columnOrder, columnVisibility, sortedEmployees, exportFilename]);
+  const hasActiveFilters = useMemo(() => {
+    const { search, team, status, position, orgUnit, showInactive } = filters;
+    return (
+      Boolean(search) ||
+      Boolean(team) ||
+      Boolean(status) ||
+      Boolean(position) ||
+      Boolean(orgUnit) ||
+      showInactive
+    );
+  }, [filters]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ label: string; onRemove: () => void }> = [];
+    if (filters.team) {
+      chips.push({
+        label: `Команда: ${filters.team}`,
+        onRemove: () => handleFilterChange('team', ''),
+      });
+    }
+    if (filters.status) {
+      chips.push({
+        label: `Статус: ${STATUS_LABELS[filters.status as EmployeeStatus]}`,
+        onRemove: () => handleFilterChange('status', ''),
+      });
+    }
+    if (filters.position) {
+      chips.push({ label: `Должность: ${filters.position}`, onRemove: () => handleFilterChange('position', '') });
+    }
+    if (filters.orgUnit) {
+      chips.push({ label: `Точка: ${filters.orgUnit}`, onRemove: () => handleFilterChange('orgUnit', '') });
+    }
+    if (filters.showInactive) {
+      chips.push({ label: 'Показывать уволенных', onRemove: () => handleFilterChange('showInactive', false) });
+    }
+    return chips;
+  }, [filters]);
+
+  const selectedTags = useMemo(() => {
+    const tags = new Set<string>();
+    employees.forEach((emp) => {
+      if (selectedEmployees.has(emp.id)) {
+        emp.tags.forEach((tag) => tags.add(tag));
+      }
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [employees, selectedEmployees]);
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="border-b border-gray-200 p-6 space-y-4">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Сотрудники</h1>
-            <p className="text-gray-600">
-              Актуальный список персонала с ключевыми полями карточки и статусами
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowFilters(prev => !prev)}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              {showFilters ? 'Скрыть фильтры' : 'Показать фильтры'}
-            </button>
-            <button
-              type="button"
-              onClick={onAddEmployee}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              + Новый сотрудник
-            </button>
-          </div>
-        </div>
+      <input
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        ref={importInputRef}
+        className="sr-only"
+        onChange={handleImportChange}
+      />
 
-        {showBulkActions && (
-          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-blue-900">
-            <span>Выбрано сотрудников: {selectedEmployees.size}</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="px-3 py-1 bg-white border border-blue-200 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
-              >
-                Экспорт
-              </button>
-              <button
-                type="button"
-                className="px-3 py-1 bg-white border border-blue-200 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
-              >
-                Изменить статус
-              </button>
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="text-xs font-medium text-blue-800 hover:underline"
-              >
-                Очистить
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3">
+      <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="border-b border-gray-200 p-6 space-y-4">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Сотрудники</h1>
+              <p className="text-gray-600">
+                Актуальный список персонала с ключевыми полями карточки и статусами
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
               <button
                 type="button"
-                onClick={() => setShowColumnSettings(true)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={iconButtonClass()}
+                aria-label={showFilters ? 'Скрыть фильтры' : 'Показать фильтры'}
+                title={showFilters ? 'Скрыть фильтры' : 'Показать фильтры'}
               >
-                🗂️ Настройка отображения
+                <span aria-hidden>{showFilters ? '📑' : '🔍'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedEmployees.size === 0) {
+                    return;
+                  }
+                  setIsBulkEditOpen(true);
+                }}
+                className={iconButtonClass(selectedEmployees.size === 0)}
+                aria-label="Открыть массовое редактирование"
+                title={selectedEmployees.size === 0 ? 'Выберите сотрудников для массового редактирования' : 'Массовое редактирование'}
+              >
+                <span aria-hidden>🛠️</span>
               </button>
               <button
                 type="button"
@@ -643,342 +709,535 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                   setShowTagManager(true);
                 }}
                 disabled={selectedEmployees.size === 0}
-                className={`px-3 py-1.5 border border-gray-300 rounded-lg text-sm transition-colors ${
-                  selectedEmployees.size === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                className={iconButtonClass(selectedEmployees.size === 0)}
+                aria-label="Управление тегами"
+                title={selectedEmployees.size === 0 ? 'Выберите сотрудников для работы с тегами' : 'Управление тегами'}
               >
-                🏷️ Теги
+                <span aria-hidden>🏷️</span>
               </button>
-              <button
-                type="button"
-                onClick={openImportModal}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                ⬇️ Импортировать
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowExportModal(true)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                ⬆️ Экспортировать
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="rounded text-blue-600 focus:ring-blue-500"
-                  checked={filters.showInactive}
-                  onChange={event => handleFilterChange('showInactive', event.target.checked)}
-                />
-                <span>Показывать уволенных</span>
-              </label>
-              <span>{visibleCount}/{totalCount}</span>
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                disabled={!hasActiveFilters}
-                className={`text-sm font-medium ${hasActiveFilters ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-default'}`}
-              >
-                Снять все фильтры
-              </button>
-            </div>
-          </div>
-
-          {filterChips.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {filterChips.map(chip => (
-                <span
-                  key={`${chip.key}-${chip.value ?? 'value'}`}
-                  className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-3 py-1 text-sm"
+              <div className="relative" ref={importMenuAnchorRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportMenu((prev) => !prev);
+                    setShowExportMenu(false);
+                  }}
+                  className={iconButtonClass()}
+                  aria-haspopup="true"
+                  aria-expanded={showImportMenu}
+                  title="Импортировать"
                 >
-                  <span className="text-sm">{chip.value ? `${chip.label}: ${chip.value}` : chip.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveChip(chip.key)}
-                    className="text-blue-600 hover:text-blue-800 focus:outline-none"
-                    aria-label={`Удалить фильтр ${chip.label}`}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {showFilters && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Поиск</label>
-                  <input
-                    type="text"
-                    value={filters.search}
-                    onChange={event => handleFilterChange('search', event.target.value)}
-                    placeholder="ФИО, логин, должность"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Команда</label>
-                  <select
-                    value={filters.team}
-                    onChange={event => handleFilterChange('team', event.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Все команды</option>
-                    {teamOptions.map(team => (
-                      <option key={team.id} value={team.id}>{team.name}</option>
+                  <span aria-hidden>⬇️</span>
+                </button>
+                {showImportMenu && (
+                  <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    {IMPORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleImportOptionSelect(option.label)}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        {option.label}
+                      </button>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Статус</label>
-                  <select
-                    value={filters.status}
-                    onChange={event => handleFilterChange('status', event.target.value as EmployeeStatus | '')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Все статусы</option>
-                    {statusOptions.map(status => (
-                      <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Должность</label>
-                  <select
-                    value={filters.position}
-                    onChange={event => handleFilterChange('position', event.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Все должности</option>
-                    {positionOptions.map(position => (
-                      <option key={position} value={position}>{position}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Точка оргструктуры</label>
-                  <select
-                    value={filters.orgUnit}
-                    onChange={event => handleFilterChange('orgUnit', event.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Все точки</option>
-                    {orgUnitOptions.map(unit => (
-                      <option key={unit} value={unit}>{unit}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Сортировка</label>
-                  <select
-                    value={filters.sortBy}
-                    onChange={event => handleFilterChange('sortBy', event.target.value as EmployeeFilters['sortBy'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="name">ФИО</option>
-                    <option value="position">Должность</option>
-                    <option value="team">Команда</option>
-                    <option value="hireDate">Дата найма</option>
-                    <option value="performance">Качество обслуживания</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Порядок</label>
-                  <select
-                    value={filters.sortOrder}
-                    onChange={event => handleFilterChange('sortOrder', event.target.value as EmployeeFilters['sortOrder'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="asc">Возрастание</option>
-                    <option value="desc">Убывание</option>
-                  </select>
-                </div>
+                  </div>
+                )}
               </div>
+              <div className="relative" ref={exportMenuAnchorRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportMenu((prev) => !prev);
+                    setShowImportMenu(false);
+                  }}
+                  className={iconButtonClass()}
+                  aria-haspopup="true"
+                  aria-expanded={showExportMenu}
+                  title="Экспортировать"
+                >
+                  <span aria-hidden>⬆️</span>
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    {EXPORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleExportOptionSelect(option.label)}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowColumnSettings(true)}
+                className={iconButtonClass()}
+                aria-label="Настроить отображение колонок"
+                title="Настроить отображение колонок"
+              >
+                <span aria-hidden>🗂️</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenQuickAdd}
+                className="h-10 w-10 flex items-center justify-center rounded-lg border border-blue-500 bg-blue-600 text-white text-lg transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Добавить нового сотрудника"
+                title="Добавить нового сотрудника"
+              >
+                <span aria-hidden>➕</span>
+              </button>
             </div>
-          )}
         </div>
-      </div>
 
-      {visibleCount === 0 ? (
-        <div className="p-12 text-center text-gray-500">
-          <div className="text-5xl mb-3">🔍</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Сотрудники не найдены</h3>
-          <p className="text-sm">Измените фильтры или снимите ограничения, чтобы увидеть сотрудников</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="w-12 px-4 py-3">
+        {showBulkActions && (
+          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-blue-900">
+              <span>Выбрано сотрудников: {selectedEmployees.size}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(true)}
+                  className="px-3 py-1 bg-white border border-blue-200 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
+                >
+                  Экспорт
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTagManager(true)}
+                  className="px-3 py-1 bg-white border border-blue-200 rounded-md text-xs font-medium hover:bg-blue-100 transition-colors"
+                >
+                  Назначить теги
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-xs font-medium text-blue-800 hover:underline"
+                >
+                  Очистить
+                </button>
+              </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+            <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     className="rounded text-blue-600 focus:ring-blue-500"
-                    checked={allSelected}
-                    onChange={handleSelectAll}
+                    checked={filters.showInactive}
+                    onChange={(event) => handleFilterChange('showInactive', event.target.checked)}
                   />
-                </th>
-                {columnVisibility.fio && (
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ф.И.О.</th>
-                )}
-                {columnVisibility.position && (
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Должность</th>
-                )}
-                {columnVisibility.orgUnit && (
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Точка оргструктуры</th>
-                )}
-                {columnVisibility.team && (
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Команда</th>
-                )}
-                {columnVisibility.scheme && (
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Схема работы</th>
-                )}
-                {columnVisibility.hourNorm && (
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Норма часов</th>
-                )}
-                {columnVisibility.status && (
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Статус</th>
-                )}
-                {columnVisibility.hireDate && (
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Дата найма</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {sortedEmployees.map(employee => {
-                const isSelected = selectedEmployees.has(employee.id);
-                const isActiveRow = activeEmployee?.id === employee.id;
+                  <span>Показывать уволенных</span>
+                </label>
+                <span>{visibleCount}/{totalCount}</span>
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters}
+                  className={`text-sm font-medium ${hasActiveFilters ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-default'}`}
+                >
+                  Снять все фильтры
+                </button>
+              </div>
+            </div>
 
-                return (
-                  <tr
-                    key={employee.id}
-                    tabIndex={0}
-                    onClick={() => setActiveEmployeeId(employee.id)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setActiveEmployeeId(employee.id);
-                      }
-                    }}
-                    aria-selected={isActiveRow}
-                    className={`cursor-pointer transition-colors ${isActiveRow ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+            {activeFilterChips.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {activeFilterChips.map((chip) => (
+                  <span
+                    key={chip.label}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-100"
                   >
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        className="rounded text-blue-600 focus:ring-blue-500"
-                        checked={isSelected}
-                        onChange={event => {
-                          event.stopPropagation();
-                          toggleEmployeeSelection(employee.id);
-                        }}
-                      />
-                    </td>
-                    {columnVisibility.fio && (
-                      <td className="px-6 py-3 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <img
-                            src={employee.personalInfo.photo || 'https://i.pravatar.cc/40?img=1'}
-                            alt={`${employee.personalInfo.lastName} ${employee.personalInfo.firstName}`}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                          <div className="ml-3">
-                            <div className="text-sm font-semibold text-gray-900">
-                              {employee.personalInfo.lastName} {employee.personalInfo.firstName}
-                            </div>
-                            <div className="text-xs text-gray-500">{employee.credentials.wfmLogin}</div>
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.position && (
-                      <td className="px-6 py-3 whitespace-nowrap text-gray-700">{employee.workInfo.position}</td>
-                    )}
-                    {columnVisibility.orgUnit && (
-                      <td className="px-6 py-3 whitespace-nowrap text-gray-700">{employee.orgPlacement.orgUnit}</td>
-                    )}
-                    {columnVisibility.team && (
-                      <td className="px-6 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: employee.workInfo.team.color }}
-                          ></span>
-                          <span className="text-gray-700">{employee.workInfo.team.name}</span>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.scheme && (
-                      <td className="px-6 py-3 whitespace-nowrap text-gray-700">
-                        {employee.orgPlacement.workScheme?.name ?? '—'}
-                      </td>
-                    )}
-                    {columnVisibility.hourNorm && (
-                      <td className="px-6 py-3 whitespace-nowrap text-center text-gray-700">
-                        {employee.orgPlacement.hourNorm ? `${employee.orgPlacement.hourNorm} ч` : '—'}
-                      </td>
-                    )}
-                    {columnVisibility.status && (
-                      <td className="px-6 py-3 whitespace-nowrap text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE_CLASSES[employee.status]}`}>
-                          {STATUS_LABELS[employee.status]}
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.hireDate && (
-                      <td className="px-6 py-3 whitespace-nowrap text-center text-gray-700">
-                        {formatDate(employee.workInfo.hireDate)}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    {chip.label}
+                    <button
+                      type="button"
+                      onClick={chip.onRemove}
+                      className="text-blue-600 hover:text-blue-800"
+                      aria-label={`Удалить фильтр ${chip.label}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {showFilters && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Поиск</label>
+                    <input
+                      type="text"
+                      value={filters.search}
+                      onChange={(event) => handleFilterChange('search', event.target.value)}
+                      placeholder="ФИО, логин, должность"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Команда</label>
+                    <select
+                      value={filters.team}
+                      onChange={(event) => handleFilterChange('team', event.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Все команды</option>
+                      {Array.from(new Map(employees.map((emp) => [emp.workInfo.team.id, emp.workInfo.team])).values()).map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Статус</label>
+                    <select
+                      value={filters.status}
+                      onChange={(event) => handleFilterChange('status', event.target.value as EmployeeStatus | '')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Все статусы</option>
+                      {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Должность</label>
+                    <input
+                      type="text"
+                      value={filters.position}
+                      onChange={(event) => handleFilterChange('position', event.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Точка оргструктуры</label>
+                    <input
+                      type="text"
+                      value={filters.orgUnit}
+                      onChange={(event) => handleFilterChange('orgUnit', event.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Сортировка</label>
+                    <select
+                      value={filters.sortBy}
+                      onChange={(event) => handleFilterChange('sortBy', event.target.value as EmployeeFilters['sortBy'])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="name">ФИО</option>
+                      <option value="position">Должность</option>
+                      <option value="team">Команда</option>
+                      <option value="hireDate">Дата найма</option>
+                      <option value="performance">Качество обслуживания</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-gray-500 mb-1">Порядок</label>
+                    <select
+                      value={filters.sortOrder}
+                      onChange={(event) => handleFilterChange('sortOrder', event.target.value as EmployeeFilters['sortOrder'])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="asc">Возрастание</option>
+                      <option value="desc">Убывание</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      )}
 
-    </div>
+        {visibleCount === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="text-5xl mb-3">🔍</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Сотрудники не найдены</h3>
+            <p className="text-sm">Измените фильтры или снимите ограничения, чтобы увидеть сотрудников</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="w-12 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                      checked={visibleCount > 0 && selectedEmployees.size === visibleCount}
+                      onChange={handleSelectAll}
+                      aria-label="Выбрать всех сотрудников"
+                    />
+                  </th>
+                  {COLUMN_ORDER.filter((column) => columnVisibility[column.key]).map((column) => (
+                    <th
+                      key={column.key}
+                      className={`px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider ${
+                        column.key === 'hourNorm' || column.key === 'status' || column.key === 'hireDate'
+                          ? 'text-center'
+                          : 'text-left'
+                      }`}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {sortedEmployees.map((employee) => {
+                  const isSelected = selectedEmployees.has(employee.id);
 
-      {showColumnSettings && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={() => setShowColumnSettings(false)}>
+                  const openEmployeeDrawer = () => {
+                    setIsDrawerLoading(true);
+                    setActiveEmployeeId(employee.id);
+                  };
+
+                  const handleRowSelectionToggle = () => {
+                    toggleEmployeeSelection(employee.id);
+                  };
+
+                  return (
+                    <tr
+                      key={employee.id}
+                      tabIndex={0}
+                      onClick={(event) => {
+                        const target = event.target as HTMLElement;
+                        if (target.closest('input[type="checkbox"]') || target.closest('button')) {
+                          return;
+                        }
+                        handleRowSelectionToggle();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === ' ') {
+                          event.preventDefault();
+                          handleRowSelectionToggle();
+                        }
+                      }}
+                      className={`transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                        isSelected ? 'bg-blue-50 border-l-4 border-blue-400' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                          checked={isSelected}
+                          onChange={(event) => {
+                            toggleEmployeeSelection(employee.id);
+                          }}
+                          aria-label={`Выбрать ${employee.personalInfo.lastName} ${employee.personalInfo.firstName}`}
+                        />
+                      </td>
+
+                      {columnVisibility.fio && (
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <img
+                              src={employee.personalInfo.photo || 'https://i.pravatar.cc/40?img=1'}
+                              alt={`${employee.personalInfo.lastName} ${employee.personalInfo.firstName}`}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                            <div className="ml-3 space-y-1">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openEmployeeDrawer();
+                                }}
+                                className="text-sm font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                              >
+                                {employee.personalInfo.lastName} {employee.personalInfo.firstName}
+                              </button>
+                              <div className="text-xs text-gray-500">{employee.credentials.wfmLogin}</div>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.position && (
+                        <td className="px-6 py-3 whitespace-nowrap text-gray-700">{employee.workInfo.position}</td>
+                      )}
+
+                      {columnVisibility.orgUnit && (
+                        <td className="px-6 py-3 whitespace-nowrap text-gray-700">{employee.orgPlacement.orgUnit}</td>
+                      )}
+
+                      {columnVisibility.team && (
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: employee.workInfo.team.color }}
+                            />
+                            <span className="text-gray-700">{employee.workInfo.team.name}</span>
+                          </div>
+                        </td>
+                      )}
+
+                      {columnVisibility.scheme && (
+                        <td className="px-6 py-3 whitespace-nowrap text-gray-700">
+                          {employee.orgPlacement.workScheme?.name ?? '—'}
+                        </td>
+                      )}
+
+                      {columnVisibility.hourNorm && (
+                        <td className="px-6 py-3 whitespace-nowrap text-center text-gray-700">
+                          {employee.orgPlacement.hourNorm}
+                        </td>
+                      )}
+
+                      {columnVisibility.status && (
+                        <td className="px-6 py-3 whitespace-nowrap text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE_CLASSES[employee.status]}`}>
+                            {STATUS_LABELS[employee.status]}
+                          </span>
+                        </td>
+                      )}
+
+                      {columnVisibility.hireDate && (
+                        <td className="px-6 py-3 whitespace-nowrap text-center text-gray-700">
+                          {employee.workInfo.hireDate.toLocaleDateString('ru-RU')}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {isInitialLoading && (
+          <div className="absolute inset-0 z-20 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-transparent rounded-full animate-spin" />
+            <div className="w-full max-w-4xl space-y-3 px-6">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={`loader-row-${index}`}
+                  className="h-11 rounded-lg bg-gray-200/80 animate-pulse"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isBulkEditOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={() => setIsBulkEditOpen(false)}>
           <div
-            className="ml-auto h-full w-full max-w-sm bg-white shadow-xl flex flex-col"
-            onClick={event => event.stopPropagation()}
+            className="ml-auto h-full w-full max-w-xl bg-white shadow-xl flex flex-col"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">Настройка отображения</h3>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Редактирование данных сотрудников</h3>
+                <p className="text-sm text-gray-500">
+                  Массовое обновление атрибутов будет доступно после согласования сценариев с продуктовой командой.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowColumnSettings(false)}
+                onClick={() => setIsBulkEditOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Закрыть"
+                aria-label="Закрыть массовое редактирование"
               >
                 ✕
               </button>
             </div>
+            <div className="px-6 py-5 space-y-4 text-sm text-gray-600">
+              <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
+                Выбрано сотрудников: <span className="font-medium">{selectedEmployees.size}</span>. Заглушка повторяет входную точку WFM: меню откроется из панели инструментов и предложит выбрать поля для массового обновления.
+              </div>
+              <p>
+                Планируется поддержка изменения команд, статусов, тегов и рабочих схем сразу для нескольких сотрудников. На этом месте появится форма с чекбоксами и предпросмотром изменений.
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-gray-600">
+                <li>Шаг 1 — выбрать сотрудников из списка.</li>
+                <li>Шаг 2 — указать поля для обновления и задать новые значения.</li>
+                <li>Шаг 3 — подтвердить изменения и дождаться результата массовой операции.</li>
+              </ul>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsBulkEditOpen(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Понятно
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Column settings drawer */}
+      {showColumnSettings && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={() => setShowColumnSettings(false)}>
+          <div
+            className="ml-auto h-full w-full max-w-sm bg-white shadow-xl flex flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowColumnSettings(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Вернуться к списку сотрудников"
+                >
+                  ←
+                </button>
+                <h3 className="text-base font-semibold text-gray-900">Настройка отображения</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowColumnSettings(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Закрыть настройки отображения"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-5 py-3 border-b border-gray-100">
+              <p className="text-sm text-gray-500">Выберите поля для отображения в таблице сотрудников.</p>
+            </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              {columnOrder.map(column => (
+              {COLUMN_ORDER.map((column) => (
                 <label key={column.key} className="flex items-center gap-3 text-sm text-gray-700">
                   <input
                     type="checkbox"
                     className="rounded text-blue-600 focus:ring-blue-500"
                     checked={columnVisibility[column.key]}
-                    onChange={() => toggleColumnVisibility(column.key)}
+                    onChange={() => toggleColumn(column.key)}
                   />
                   <span>{column.label}</span>
                 </label>
               ))}
               <button
                 type="button"
-                onClick={resetColumnVisibility}
+                onClick={() =>
+                  setColumnVisibility({
+                    fio: true,
+                    position: true,
+                    orgUnit: true,
+                    team: true,
+                    scheme: true,
+                    hourNorm: true,
+                    status: true,
+                    hireDate: true,
+                  })
+                }
                 className="text-sm text-blue-600 hover:underline"
               >
                 Восстановить по умолчанию
@@ -997,11 +1256,12 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
         </div>
       )}
 
+      {/* Tag manager */}
       {showTagManager && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => { setShowTagManager(false); setTagInput(''); setTagError(null); }}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => setShowTagManager(false)}>
           <div
             className="bg-white rounded-xl max-w-lg w-full shadow-xl"
-            onClick={event => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
@@ -1010,41 +1270,161 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => { setShowTagManager(false); setTagInput(''); setTagError(null); }}
+                onClick={() => setShowTagManager(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Закрыть"
+                aria-label="Закрыть управление тегами"
               >
                 ✕
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-5">
               <p className="text-sm text-gray-600">
-                Выбрано сотрудников: <span className="font-medium">{selectedEmployees.size}</span>. Новые теги будут добавлены к существующим.
+                Выбрано сотрудников: <span className="font-medium">{selectedEmployees.size}</span>. Выберите теги для назначения или удаления у этих сотрудников.
               </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Теги через запятую</label>
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={event => {
-                    setTagInput(event.target.value);
-                    if (tagError) setTagError(null);
-                  }}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tagError ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="VIP, Норма, План"
-                />
-                {tagError && <p className="mt-1 text-xs text-red-600">{tagError}</p>}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Название тега</label>
+                  <input
+                    type="text"
+                    value={newTagName}
+                    onChange={(event) => {
+                      setNewTagName(event.target.value);
+                      if (tagCreationError) {
+                        setTagCreationError(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Например: VIP"
+                  />
+                </div>
+                <div>
+                  <span className="block text-xs uppercase font-semibold text-gray-500 mb-2">Цвет</span>
+                  <div className="flex flex-wrap gap-2">
+                    {TAG_COLOR_PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewTagColor(color)}
+                        className={`w-7 h-7 rounded-full border transition-shadow ${
+                          newTagColor === color ? 'border-blue-600 ring-2 ring-blue-300' : 'border-transparent hover:ring-2 hover:ring-blue-200'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        aria-label={`Выбрать цвет ${color}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCreateTag}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Создать тег
+                  </button>
+                  {tagCreationError && <span className="text-xs text-red-600">{tagCreationError}</span>}
+                </div>
               </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">Доступные теги</p>
+                <div className="max-h-64 overflow-auto space-y-2">
+                  {Object.entries(tagCatalog).length === 0 ? (
+                    <p className="text-sm text-gray-500">Пока нет тегов — создайте новый, чтобы назначить сотрудникам.</p>
+                  ) : (
+                    Object.entries(tagCatalog).map(([tag, color]) => {
+                      const assigned = selectedTagNames.has(tag);
+                      const marked = tagsMarkedForRemoval.has(tag);
+                      return (
+                        <div
+                          key={tag}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2"
+                        >
+                          <label className="flex items-center gap-3 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              className="rounded text-blue-600 focus:ring-blue-500"
+                              checked={assigned}
+                              onChange={() => {
+                                toggleTagSelection(tag);
+                                if (tagError) {
+                                  setTagError(null);
+                                }
+                              }}
+                            />
+                            <span className="inline-flex items-center gap-2">
+                              <span
+                                className="inline-block w-4 h-4 rounded-sm border border-gray-300"
+                                style={{ backgroundColor: color }}
+                              />
+                              {tag}
+                            </span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleTagRemoval(tag)}
+                              className={`text-xs font-medium transition-colors ${
+                                marked ? 'text-red-600' : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              {marked ? 'Отменить удаление' : 'Удалить у выбранных'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTagDefinition(tag)}
+                              className="text-gray-400 hover:text-red-600"
+                              aria-label={`Удалить тег ${tag}`}
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                {tagsMarkedForRemoval.size > 0 && (
+                  <p className="text-xs text-red-600">
+                    К удалению у выбранных сотрудников отмечено: {tagsMarkedForRemoval.size}
+                  </p>
+                )}
+              </div>
+
+              {selectedTags.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-2">
+                  <p className="font-semibold text-gray-700">У выбранных сотрудников уже есть</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map((tag) => {
+                      const swatch = tagCatalog[tag] ?? getColorForTag(tag);
+                      return (
+                        <span
+                          key={`selected-${tag}`}
+                          className="px-2 py-1 rounded-full border border-gray-200 text-xs font-medium"
+                          style={{ backgroundColor: `${swatch}20`, color: '#1f2937' }}
+                        >
+                          {tag}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {tagError && <p className="text-xs text-red-600">{tagError}</p>}
+
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600 space-y-1">
                 <p className="font-semibold text-gray-700">Подсказка</p>
                 <p>• Указывайте краткие теги (направление, уровень навыков, график).</p>
-                <p>• Для массового импорта используйте Appendix 6.</p>
+                <p>• Отметьте флажком те теги, которые нужно добавить выбранным сотрудникам.</p>
+                <p>• Кнопка «Удалить у выбранных» позволит быстро снять теги у выделенной группы.</p>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => { setShowTagManager(false); setTagInput(''); setTagError(null); }}
+                onClick={() => setShowTagManager(false)}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Отмена
@@ -1054,116 +1434,89 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                 onClick={handleApplyTags}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
               >
-                Добавить теги
+                Применить изменения
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Import modal */}
       {showImportModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={closeImportModal}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => setShowImportModal(false)}>
           <div
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
-            onClick={event => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Импорт сотрудников</h3>
-                <p className="text-sm text-gray-500">Шаблон: Appendix 1 (Employee Import Template)</p>
+                <p className="text-sm text-gray-500">Шаблоны: Appendix 1/3/4/8</p>
               </div>
               <button
                 type="button"
-                onClick={closeImportModal}
+                onClick={() => setShowImportModal(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Закрыть"
+                aria-label="Закрыть импорт"
               >
                 ✕
               </button>
             </div>
             <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
-              <p>1. Скачайте и заполните шаблон Excel с обязательными колонками (логин, ФИО, оргструктура, часы и т.д.).</p>
-              <p>2. Проверьте форматы дат и соответствие значений справочникам (см. Appendix 1).</p>
-              <p>3. Загрузите файл в модуле &laquo;Импорт&raquo;. Система покажет ошибки в отчёте.</p>
-              <p className="text-xs text-gray-500">Дополнительно: Appendix 3 — навыки, Appendix 6 — теги.</p>
-              <div className="pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={triggerImportFilePicker}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Выбрать файл
-                </button>
-                {importSummary ? (
-                  <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-3 py-2">
-                    <span className="text-sm font-medium">{importSummary}</span>
-                    <span className="text-xs text-blue-600">Файл принят, проверка запустится после закрытия окна</span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">Поддерживаются .xlsx, .xls, .csv</p>
-                )}
-              </div>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={handleImportFileChange}
-            />
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <p className="text-gray-500">Выбран раздел: <span className="font-medium text-gray-700">{importContext}</span></p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Скачайте и заполните шаблон (Appendix 1 — сотрудники, Appendix 3 — навыки, Appendix 4 — активности, Appendix 8 — схемы).</li>
+                <li>Проверьте форматы дат и соответствие справочникам системы.</li>
+                <li>Загрузите файл: предварительная проверка выполнится на фронте, итоговая загрузка — после подключения бэкенда.</li>
+              </ol>
               <button
                 type="button"
-                onClick={closeImportModal}
+                onClick={handleImportClick}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
               >
-                Готово
+                Выбрать файл
               </button>
+              {importFeedback && <p className="text-sm text-blue-700">{importFeedback}</p>}
             </div>
           </div>
         </div>
       )}
 
+      {/* Export modal */}
       {showExportModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={closeExportModal}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => setShowExportModal(false)}>
           <div
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
-            onClick={event => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between px-6 py-4 border-б border-gray-200">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Экспорт списка сотрудников</h3>
-                <p className="text-sm text-gray-500">Экспортируется текущая выборка и колонки</p>
+                <p className="text-sm text-gray-500">Учёт активных колонок и фильтров</p>
               </div>
               <button
                 type="button"
-                onClick={closeExportModal}
+                onClick={() => setShowExportModal(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Закрыть"
+                aria-label="Закрыть экспорт"
               >
                 ✕
               </button>
             </div>
             <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
-              <p>Файл формируется в CSV/Excel и повторяет структуру Appendix 1 для удобства обратного импорта.</p>
-              <p>Колонки берутся из текущей конфигурации &laquo;Настройки отображения&raquo;.</p>
-              <p className="text-xs text-gray-500">Имя файла: {exportFilename}</p>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <p className="text-gray-500">Формат: <span className="font-medium text-gray-700">{exportContext}</span></p>
+              <p>
+                Экспорт формирует CSV-файл в соответствии с выбранными колонками и активными фильтрами.
+                Формат соответствует Appendix 1, чтобы можно было исправить данные и загрузить обратно.
+              </p>
               <button
                 type="button"
-                onClick={closeExportModal}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadCsv}
+                onClick={handleExport}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
               >
                 Скачать CSV
               </button>
+              {exportFeedback && <p className="text-sm text-blue-700">{exportFeedback}</p>}
             </div>
           </div>
         </div>
@@ -1172,8 +1525,10 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       <EmployeeEditDrawer
         employee={activeEmployee}
         isOpen={Boolean(activeEmployee)}
-        onClose={() => setActiveEmployeeId(null)}
-        onSave={handleEmployeeUpdate}
+        mode="edit"
+        isLoading={isDrawerLoading}
+        onClose={handleDrawerClose}
+        onSave={handleDrawerSave}
       />
     </>
   );

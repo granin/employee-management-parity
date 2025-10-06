@@ -191,6 +191,9 @@ const PerformanceMetricsView: React.FC<PerformanceMetricsViewProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Показатели производительности</h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-xs font-medium mb-2 uppercase tracking-wide">
+              Демонстрационный модуль
+            </span>
             <p className="text-gray-600">
               Анализ KPI и метрик эффективности сотрудников контакт-центра
             </p>

@@ -6,6 +6,8 @@ interface EmployeeEditDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (employee: Employee) => void;
+  mode?: 'edit' | 'create';
+  isLoading?: boolean;
 }
 
 interface FormState {
@@ -60,9 +62,31 @@ const statusOptions: Array<{ value: EmployeeStatus; label: string }> = [
   { value: 'terminated', label: 'Уволен' }
 ];
 
-const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({ employee, isOpen, onClose, onSave }) => {
+const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
+  employee,
+  isOpen,
+  onClose,
+  onSave,
+  mode = 'edit',
+  isLoading = false,
+}) => {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCreateIntro, setShowCreateIntro] = useState(mode === 'create');
+
+  const setFieldError = (key: string, message: string) => {
+    setErrors((prev) => ({ ...prev, [key]: message }));
+  };
+
+  const clearFieldError = (key: string) => {
+    setErrors((prev) => {
+      if (!prev[key]) {
+        return prev;
+      }
+      const { [key]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
 
   useEffect(() => {
     if (employee && isOpen) {
@@ -102,6 +126,14 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({ employee, isOpe
     }
   }, [employee, isOpen]);
 
+  useEffect(() => {
+    if (mode === 'create' && isOpen) {
+      setShowCreateIntro(true);
+    } else {
+      setShowCreateIntro(false);
+    }
+  }, [mode, isOpen, employee?.id]);
+
   const handleOverlayClick = () => {
     onClose();
   };
@@ -120,6 +152,20 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
       updated[section][field] = value;
       return updated;
     });
+    const errorKey = `${section}.${field}`;
+    clearFieldError(errorKey);
+  };
+
+  const handleContinueFromIntro = () => {
+    if (!formState) {
+      return;
+    }
+    if (!formState.credentials.wfmLogin.trim()) {
+      setFieldError('credentials.wfmLogin', 'Укажите логин WFM');
+      return;
+    }
+    clearFieldError('credentials.wfmLogin');
+    setShowCreateIntro(false);
   };
 
   const validate = (): boolean => {
@@ -218,39 +264,47 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
     onSave(updatedEmployee);
   };
 
+  const skillsList = useMemo(() => (employee ? employee.skills.map((skill) => skill.name).join(', ') : ''), [employee]);
+  const reserveSkillsList = useMemo(
+    () => (employee ? employee.reserveSkills.map((skill) => skill.name).join(', ') : ''),
+    [employee]
+  );
+  const currentTags = useMemo(() => {
+    if (!formState) {
+      return [] as string[];
+    }
+    return formState.tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }, [formState?.tags]);
+
   const fieldError = (key: string) => errors[key];
-
-  const skillsList = useMemo(() => {
-    if (!employee) {
-      return '';
-    }
-    return employee.skills.map(skill => skill.name).join(', ');
-  }, [employee]);
-
-  const reserveSkillsList = useMemo(() => {
-    if (!employee) {
-      return '';
-    }
-    return employee.reserveSkills.map(skill => skill.name).join(', ');
-  }, [employee]);
 
   if (!isOpen || !employee || !formState) {
     return null;
   }
 
+  const isCreateMode = mode === 'create';
+  const displayName = [formState.personalInfo.lastName, formState.personalInfo.firstName]
+    .filter(Boolean)
+    .join(' ');
+  const headerName = displayName || 'Новый сотрудник';
+  const headerLogin = formState.credentials.wfmLogin.trim() || '—';
+
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={handleOverlayClick}>
       <div
-        className="ml-auto h-full w-full max-w-2xl bg-white shadow-xl flex flex-col"
+        className="relative ml-auto h-full w-full max-w-2xl bg-white shadow-xl flex flex-col"
         onClick={handleContentClick}
       >
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
           <div className="space-y-1">
-            <p className="text-xs uppercase text-gray-500">Редактирование данных сотрудника</p>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {employee.personalInfo.lastName} {employee.personalInfo.firstName}
-            </h2>
-            <p className="text-sm text-gray-500">Логин WFM: {employee.credentials.wfmLogin}</p>
+            <p className="text-xs uppercase text-gray-500">
+              {isCreateMode ? 'Создание нового сотрудника' : 'Редактирование данных сотрудника'}
+            </p>
+            <h2 className="text-lg font-semibold text-gray-900">{headerName}</h2>
+            <p className="text-sm text-gray-500">Логин WFM: {headerLogin}</p>
           </div>
           <button
             type="button"
@@ -261,7 +315,54 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
             ✕
           </button>
         </div>
-
+        {showCreateIntro ? (
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Учетные данные</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Логин WFM</label>
+                  <input
+                    type="text"
+                    value={formState.credentials.wfmLogin}
+                    onChange={(event) => handleChange('credentials', 'wfmLogin', event.target.value)}
+                    className={`w-full px-3 py-2 border ${fieldError('credentials.wfmLogin') ? 'border-red-400 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg text-sm focus:outline-none focus:ring-2`}
+                    placeholder="Введите логин"
+                  />
+                  {fieldError('credentials.wfmLogin') && (
+                    <p className="mt-1 text-xs text-red-500">{fieldError('credentials.wfmLogin')}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Пароль</label>
+                  <input
+                    type="password"
+                    value={formState.credentials.password}
+                    onChange={(event) => handleChange('credentials', 'password', event.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Задайте временный пароль"
+                  />
+                </div>
+              </div>
+            </section>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleContinueFromIntro}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Продолжить
+              </button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
           <div className="px-6 py-5 space-y-6">
             <section>
@@ -479,8 +580,8 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Теги</label>
+                <div className="sm:col-span-2 space-y-2">
+                  <label className="block text-xs uppercase font-medium text-gray-500">Теги</label>
                   <input
                     type="text"
                     value={formState.tags}
@@ -488,6 +589,19 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Плавающий, Норма, План"
                   />
+                  <div className="flex flex-wrap gap-2">
+                    {currentTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {currentTags.length === 0 && (
+                      <span className="text-xs text-gray-400">Теги появятся здесь после сохранения</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -519,10 +633,17 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
               type="submit"
               className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
-              Сохранить изменения
+              {isCreateMode ? 'Создать сотрудника' : 'Сохранить изменения'}
             </button>
           </div>
         </form>
+        )}
+
+        {isLoading && (
+          <div className="absolute inset-0 z-20 bg-white/85 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
       </div>
     </div>
   );

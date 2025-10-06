@@ -13,19 +13,7 @@
   - `/Users/m/Documents/replica/CH5_Schedule_Build.pdf`
   - `/Users/m/Documents/replica/CH6_Reports.pdf`
   - `/Users/m/Documents/replica/orchestrator/argus/imports/code/CH7_Appendices.md`
-- **Screenshots** (stored in `~/Desktop/shots epml mamgnt/`; open with `open "~/Desktop/shots epml mamgnt/<filename>.png"` before working on a feature):
-  - `1a43259c-9d43-4ecd-a25b-987334e72fc4.png` – Employees toolbar («Настройка отображения», «Теги», «Импортировать», «Экспортировать», checkbox «Показывать уволенных», counter 51/51, link «Снять все фильтры»). Capture exact icon order and spacing.
-  - `1e958a67-4c07-48f1-8f6c-b797d9be0f60.png` – Schedule grid (`/schedule/graph`) reference for future demos: employee KPI column, date header format, unpublished changes banner.
-  - `37abcec4-2d1c-4732-bc54-d7cdbb1261e8.png` – Graph loading spinner; reuse pattern for list/drawer skeletons.
-  - `638fdb1b-1f4d-4da2-b0c4-167f2550345d.png` – Column picker side drawer; note field order (Внешние логины → Электронная почта) and CTA «Сохранить изменения».
-  - `6427ca80-ee3c-4783-b79e-64ca40f4276b.png` – Edit drawer obligatory section: Фамилия/Имя/Отчество/Логин WFM/Внешние логины/Пароль/Точка оргструктуры/Офис/Должность/Часовой пояс/Норма часов.
-  - `85c56853-a71a-4073-8973-4732e848f165.png` – Drawer loading state; keep spinner placement consistent.
-  - `90f0786c-862e-4737-ac8c-7afb2567e962.png` – Optional fields block: Смены предпочтений, Схема работы, Навыки, Резервные навыки, Задачи, Теги, Номер, Адрес, Телефон, Email, Дата рождения, Дата найма.
-  - `b52ecd6a-0028-45fb-a91c-299d97c2eee6.png` – Toolbar crop focusing on column picker icon (spreadsheet) so developers know trigger target.
-  - `bd20ff73-e081-44c5-a4b9-2db4541e9d23.png` – Alternate toolbar capture; confirm font weights/alignment.
-  - `d1cf682d-ab3d-4417-8223-195716783ad8.png` – Employee module loading screen copy («Загрузка…»); use for skeleton messaging.
-  - `d4d86894-87ba-454c-8678-f76c46829fd7.png` – Full list baseline (row height, alternating background).
-  - `fafa2f56-7047-4055-8b50-f2475f2af74d.png` – Drawer detail close-up to capture tags pill style and field placeholders.
+- **Screenshots** – see `docs/SCREENSHOT_INDEX.md` for alias ↔ filename mapping (all images live in `~/Desktop/shots epml mamgnt/`).
 - **Prototype screenshots** (current mock UI in this repo, `~/Desktop/Screenshot 2025-10-05 ...`; open before coding to match spacing/labels):
   - `Screenshot 2025-10-05 at 21.46.05.png` – Quick-add modal step 1; shows progress tracker (1→3), required personal fields (Имя, Фамилия, Email, Телефон) and CTA copy («Далее», «Отмена»). Use as baseline when extending later steps.
   - `Screenshot 2025-10-05 at 21.46.01.png` – Performance dashboard mock; note KPI card order, goal captions, tab toggle (Обзор/Детали/Сравнение), sort dropdown text, and Chart.js placeholder wording.
@@ -42,80 +30,78 @@
 
 ## 3. Current Toolchain Status
 - Repo path: `~/git/client/naumen/employee-management`
-- Dependencies not yet installed (`npm install` blocked by lingering proxy); fix proxy settings before implementation starts.
-- Vite config untouched; keep as-is until we have successful local builds.
-- Git remote not configured; plan to push to a new GitHub repository once the first UI slice is complete.
+- Environment fix completed (proxy exports removed); `npm install`, `npm run build`, and `npm run preview -- --host 127.0.0.1 --port 4173` all succeed.
+- Deployment flow: mirror this folder into `~/git/client/employee-management-parity` (GitHub repo `granin/employee-management-parity`) which is linked to the Vercel project of the same name.
+- Build artefacts (`dist/`, `node_modules/`, `.vercel/`) remain ignored; run `npm install` after every fresh clone before invoking `npm run build`.
 
 ## 4. Current Implementation Snapshot (Code Audit)
-- `src/App.tsx` renders tabs (`Список сотрудников`, `Фото галерея`, `Показатели`, `Быстрое добавление`, `Статусы`, `Сертификации`, `Навыки`). Only the photo/performance/quick-add components show content; list tab renders a placeholder card; status/certifications tabs display static “component in development” messages.
-- `EmployeeListContainer.tsx`: fetches mock data after timeout, then shows only the placeholder card “Основные компоненты загружены”; no table, filters, or edit drawer. View/filter state objects exist but aren’t used yet.
-- `QuickAddEmployee.tsx`: implements a 3-step modal (personal info, job info, success). Lacks many required fields from real wizard (logins, passwords, work scheme, skills, tags). Step validation only covers basic fields; success step auto-closes after timeout.
+- `src/App.tsx` renders the primary navigation (`Список сотрудников`, `Фото галерея (демо)`, `Показатели (демо)`, `Статусы (демо)`, `Сертификации (демо)`, `Навыки (демо)`) and hosts the global quick-add drawer. Demo tabs now expose explicit badges so parity reviewers know they are placeholders.
+- `EmployeeListContainer.tsx` presents the full employee table with filters, icon toolbar (bulk edit/tag/import/export), selection state, and the edit drawer. Bulk edit currently opens a stub describing the upcoming flow.
+- `QuickAddEmployee.tsx` mirrors WFM’s minimal flow (login + password), seeds a draft employee, and drives the edit drawer for the follow-up fields.
 - `EmployeePhotoGallery.tsx`: fully styled gallery with filters, settings, statistics; currently backed by the same single mock employee dataset.
 - `PerformanceMetricsView.tsx`: renders KPI cards, ranking table, and chart placeholder with random trend values; requires real data integration and alignment with actual reports.
 - Supporting components (`EmployeeStatusManager`, `CertificationTracker`, etc.) still placeholders (to be reviewed later).
 - `src/types/employee.ts` defines extensive data models but duplicates `ViewModes` and `BulkAction` at the bottom; cleanup needed when refactoring.
 
+### Progress – 06 Oct 2025 parity sweep
+- Seeded a realistic dataset of 10 mock employees with varied statuses/teams for list exercises.
+- Converted quick add to the WFM-style minimal drawer (логин + пароль) and auto-open the full edit drawer for the new draft.
+- Reworked the employee list toolbar to icon buttons, added a bulk-edit stub, and switched row click to selection mode while exposing the edit drawer via the name button.
+- Labeled non-parity modules (галерея, показатели, статусы, сертификации, навыки) as demo-only so testers understand the current scope.
+
 
 ## 5. Feature Backlog (Delta vs Reality)
 | Area | Target (Reality) | Current Mock | Evidence | Required Actions |
 | ---- | ---------------- | ------------ | -------- | ---------------- |
-| Employee List & Toolbar | Full table, column picker, tag/import/export actions, dismissed toggle, filter chips, row click opens edit drawer | Placeholder headline only | Screenshots `1a43...`, `1e95...`, `37ab...`, `638f...`; report Section “Employee list”; CH3 Employees | Build data grid component, toolbar actions, filter state, row click → drawer |
-| Edit Drawer | Required/optional sections, validations, save flow | Not present | Screenshots `638f...`, `6427...`; CH3 Employees | Create drawer UI, align form schema, implement validation |
-| Quick Add Wizard | Multi-step flow (names→logins→org structure→scheme/skills→summary) | Single step stub | Screenshots `85c5...`, `90f0...`, `b52e...`; prototype `Screenshot 2025-10-05 at 21.46.05.png`; report “Quick add”; CH3 | Implement stepper, shared schema, validation, summary |
-| Filters & Display Settings | Persistent filters, dismissed toggle, saved column settings | Missing | Screenshots `1a43...`, `37ab...`; report; CH3 | Build filter chips, toggle, column settings drawer with local persistence |
-| Tags / Import / Export | Manage tags & Excel import/export | Missing | Screenshot `1a43...`; CH7 Appendices; report | Define placeholder dialogs, integrate with future API |
-| Photo Gallery | Not in real system (optional add-on) | Exists w/ placeholders | Prototype `Screenshot 2025-10-05 at 21.45.57.png`, `...54.png`; report | Decide to keep (spec backend requirements) or remove |
-| Performance Dashboard | Metrics part of reports, not standalone ranking | Custom dashboard | Prototype `Screenshot 2025-10-05 at 21.46.01.png`; report “Performance indicators”; CH6 | Decide to keep & define endpoints or align with actual reports |
-| Future Modules | Scheduling, reports, requests | Out of scope currently | Screenshot `1e95...`; CH5/CH6 docs; report sections | Gather evidence, plan later UI pages |
+| Row interaction & edit drawer | Row click opens drawer (obligatory + optional sections, edit/save/cancel, skills/tags panels) | Row click reloads page; drawer accessible only via direct import | Screenshots `638f...`, `6427...`; CH3 Employees | Wire row click + “Новый сотрудник” CTA to `EmployeeEditDrawer`; pre-fill data; stub save/reset actions |
+| Tag management | Dedicated modal to create/assign/remove tags; updates list filters | Info modal only; no assignment | Screenshot `1a43...`; Appendix 6 | Implement mock tag CRUD + assignment state; persist for selected employees |
+| Import / Export | File chooser for imports, downloadable CSV/XLSX respecting column visibility | Info modal only | Appendix 1/3/4/8 | Provide stubbed uploads (accept file, show success toast) & CSV download mirroring template headers |
+| Quick Add step 3 | Org unit / office / time zone / hour norm editable; wizard advances | Inputs disabled; validation blocks progress | CH3 Quick Add; screenshots `638f...`, `6427...` | Enable fields, set sensible defaults from team, ensure validation passes |
+| Quick Add credentials | Suggested WFM login derived from names; external logins captured | Always `ivanov.il`; external logins empty | CH3 Quick Add | Generate login from form data (transliteration), allow edit, capture external logins list |
+| Quick Add completion | On success, summary shows data; employee added to list | Wizard cannot finish | Same as above | After step 4, push new mock employee into list state; show success toast |
+| Skills UX | Display/prioritise skills & reserve skills; edit modals | Static text only | CH3 Employees; Appendix 3 | Render read-only pills in drawer + quick add summary; add placeholder edit modal with mock state |
+| Toolbar persistence | Column visibility, dismissed toggle, active filter chips persist | Works per session only | Screenshots `1a43...` | Store settings in localStorage; display active filter chips matching real UI |
+| Optional modules | Clarify status of Photo Gallery / Performance pages | Present as custom dashboards | Prototype screenshots | Document as demo-only until backend scope defined |
+
+### Screenshot Parity Notes (2025-10-06 review)
+- Toolbar baseline (`employee-toolbar-topbar.png`): dark header, icon order (display settings → tags → import → export), `51/51` counter, zebra rows, “Показывать уволенных” checkbox.
+- Column picker drawer (`reference/column-picker-drawer.png`): title copy, field checklist, “Сохранить изменения” CTA.
+- Employee drawer (`reference/edit-drawer-required-fields.png`, `reference/edit-drawer-optional-fields.png`, `reference/drawer-tags-detail.png`): split sections, inline tags render, skills/reserve skills summaries.
+- Loading cues (`reference/employee-module-loader.png`, `edit-employee-loading.png`): semi-transparent overlay with spinner while list/drawer loads data.
+- Import/export modals (`import-modal.png`, `export-modal.png`) and tag dialog (`tags-modal.png`) confirm current stub copy is aligned.
 
 ## 6. Prioritised Phases
-1. **Environment Fix**
-   - Remove SOCKS proxy exports from shell profiles; ensure `npm install`, `npm run build` succeed. (See `docs/ENVIRONMENT_FIX_TODO.md`.)
-   - Capture before/after commands in task log.
-   - ✅ 2025-10-06: Completed (`npm install`, `npm run build`, `npm run preview` verified; proxies now opt-in).
-2. **Data & Types Baseline**
-   - Define TypeScript models for employee card (required vs optional fields) using CH3 + screenshot evidence.
-   - Create mock data mirroring real fields (login, POS, scheme, tags, etc.).
-   - ✅ 2025-10-06: `Employee` interface now includes credentials/org placement/hour norm/tags; mocks in `App.tsx` and `EmployeeListContainer` updated to match real drawer fields.
-3. **Employee List & Drawer**
-   - Implement table with columns, actions, filters, row drawer.
-   - Match label text with real system (using translations from screenshots/docs).
-   - ✅ 2025-10-06: Employee grid + toolbar + filters in place; edit drawer mirrors required/optional sections with validation and local save stub.
-4. **Quick Add Wizard**
-   - Build multi-step form with shared validation aligning to real wizard steps.
-   - ✅ 2025-10-06: Wizard expanded to 4 steps (личные данные → учетные данные → оргструктура → доп. параметры) with validation + summary.
-5. **Top-Bar Utilities**
-   - Column settings, tags, import/export, dismissed toggle.
-   - Reference Appendix templates for import/export placeholders.
-   - ✅ 2025-10-06: Toolbar buttons wired to column picker, tag manager (merges tags), and import/export guidance aligned with Appendix templates.
-6. **Optional Modules Decision**
-   - Photo gallery & performance pages: keep with specs or remove; document rationale.
-   - ✅ 2025-10-06: Модули Photo Gallery и Performance оставлены как демонстрационные; основное parity сосредоточено на списке сотрудников. После стабилизации core-модулей открыть отдельные задачи на интеграцию данных.
-7. **Evidence Capture for Future Work**
-   - Document scheduling/reporting needs (CH5/CH6 references) for later implementation.
+1. **Employee card wiring**
+   - Connect list row + “Новый сотрудник” CTA to `EmployeeEditDrawer` (mock save/cancel, tag/skill placeholders).
+   - Ensure drawer highlights required vs optional blocks per real screenshots.
+2. **Toolbar interactions**
+   - Implement functional tag modal and import/export stubs; persist column/dismissed state.
+3. **Quick add completion**
+   - Fix Step 3 validation, improve login generation, render summary, append new mock employee on success.
+4. **Skills presentation**
+   - Expose skills/reserve skills read-only pills + placeholder edit modals in drawer and wizard summary.
+5. **Agent feedback loop**
+   - Rename screenshots for side-by-side comparisons; craft explicit checklist for next browser-agent run.
 
-## 7. Agent Workstreams (from parity report)
-- **Delta detection (200 tasks):** side-by-side comparisons for all prototype tabs.
-- **Evidence capture (100 tasks):** document uncovered sections (employee card, scheduling, requests, reports, imports, permissions).
-- **Golden journeys (50 tasks):** onboard employee, schedule assignment, request approval, report export, data import.
-- Log findings back into this plan (Sections 4 & 9 obligations).
+## 7. Agent Workstreams (next run)
+- **Side-by-side delta check:** Require agents to open the real system and the new Vercel build in parallel, capture each screen (list, drawer, quick add steps, toolbar modals) and note only residual differences.
+- **Evidence refresh:** If gaps remain, capture updated screenshots/templates to drop into the screenshot index for developers.
+- **Golden journeys:** Re-run once the above blockers are addressed to confirm flows (create → edit → schedule → report).
 
 ## 8. Implementation Cadence
-- Work in feature branches (e.g., `feature/employee-table`).
-- For each slice: edit UI → `npm run build` → capture screenshots → update plan → commit.
-- Hold off on Vercel deployment until slice 3 completes or stakeholders request preview.
-- Once ready: create GitHub repo, push, connect to new Vercel project, deploy.
+- Work in focused branches per phase (e.g., `feature/drawer-wiring`, `feature/quick-add-finish`).
+- For each slice: update UI → `npm run build` → capture screenshots (store under meaningful names) → update docs → commit.
+- Deploy to `employee-management-parity` Vercel project after each major slice; keep change log for agent handoff.
 
 ## 9. QA Checklist (expand per feature)
-- [ ] Employee table renders with real column labels.
-- [ ] Column picker opens/toggles visibility.
-- [ ] Filters show counts/responsive to interactions.
-- [ ] Column and filter preferences persist after reload.
-- [ ] Row click opens drawer with required/optional sections.
-- [ ] Quick add wizard steps match real workflow.
-- [ ] Quick add summary chips display tags/skills/logins correctly.
-- [ ] Russian translations match screenshots/docs.
-- [ ] Import/Export stubs show expected copy and accept sample file uploads.
+- [ ] Row click + “Новый сотрудник” open the edit drawer with correct data.
+- [ ] Drawer save/cancel shows validation errors for required fields.
+- [ ] Tag modal adds/removes tags and updates filter chips.
+- [ ] Import modal accepts a file and reports success (no backend call).
+- [ ] Export creates CSV with correct headers respecting column visibility.
+- [ ] Quick add drawer (логин/пароль) creates a draft employee and opens the edit drawer.
+- [ ] Drawer exposes required fields (Фамилия/Имя/Отчество/Логин WFM/Пароль/Оргструктура/Норма часов) with validation.
+- [ ] Tag manager adds/removes tags across the current selection.
 
 ## 10. Open Questions
 - Do we retain Photo Gallery and Performance tabs as custom additions?
@@ -134,7 +120,7 @@
 - Incorporate any mandatory steps/macros/logging formats from these docs into agent task templates.
 
 ## 12. Next Immediate Steps
-1. Capture updated screenshots: toolbar filter chips + persistence confirmation, quick add summary chips.
-2. Hand prepared agent prompt the new CSV export/import instructions for sandbox validation.
-3. Draft follow-up story for editable skills/reserve skills management in the drawer.
-4. Outline API integration requirements for import/export endpoints (success + error flows).
+1. Confirm screenshot interpretations in Section 2 against parity report.
+2. Clean proxy settings and confirm npm toolchain works.
+3. Begin Phase 2: define shared form models and mock data.
+4. Draft agent task templates using MAGIC PROMPTS/HUMAN_LAYER guidance.
