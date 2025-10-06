@@ -220,12 +220,23 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
 
   const fieldError = (key: string) => errors[key];
 
+  const skillsList = useMemo(() => {
+    if (!employee) {
+      return '';
+    }
+    return employee.skills.map(skill => skill.name).join(', ');
+  }, [employee]);
+
+  const reserveSkillsList = useMemo(() => {
+    if (!employee) {
+      return '';
+    }
+    return employee.reserveSkills.map(skill => skill.name).join(', ');
+  }, [employee]);
+
   if (!isOpen || !employee || !formState) {
     return null;
   }
-
-  const skillsList = useMemo(() => employee.skills.map(skill => skill.name).join(', '), [employee.skills]);
-  const reserveSkillsList = useMemo(() => employee.reserveSkills.map(skill => skill.name).join(', '), [employee.reserveSkills]);
 
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={handleOverlayClick}>
