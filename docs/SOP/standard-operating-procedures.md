@@ -20,6 +20,14 @@
 - `docs/SOP/ui-walkthrough-checklist.md` must reflect the latest UI flow.
 - `docs/Tasks/parity-backlog-and-plan.md` should always show the next actionable items.
 
+### Post-change Checklist
+After landing a feature or bug fix:
+1. Update `docs/EMPLOYEE_MANAGEMENT_PARITY_PLAN.md` with behaviour changes.
+2. Revise `docs/Tasks/parity-backlog-and-plan.md` (move completed items, add follow-ups).
+3. Refresh SOP or walkthrough docs if workflows changed.
+4. Capture new/updated screenshots and reference them in `docs/SCREENSHOT_INDEX.md`.
+5. Add verification notes to `docs/SESSION_HANDOFF.md`.
+
 ## Deployments
 1. Confirm tests pass locally.
 2. `git push origin main`.
