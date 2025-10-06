@@ -1,6 +1,6 @@
 // /Users/m/Documents/wfm/competitor/naumen/employee-management/src/App.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import EmployeeListContainer from './components/EmployeeListContainer';
 import EmployeePhotoGallery from './components/EmployeePhotoGallery';
 import PerformanceMetricsView from './components/PerformanceMetricsView';
@@ -137,14 +137,54 @@ const App: React.FC = () => {
     }
   ];
 
-  const [employeesState] = useState<Employee[]>(initialEmployees);
-  const teams: Team[] = [employeesState[0].workInfo.team];
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const teams: Team[] = useMemo(() => {
+    const unique = new Map<string, Team>();
+    employees.forEach(emp => {
+      unique.set(emp.workInfo.team.id, emp.workInfo.team);
+    });
+    return Array.from(unique.values());
+  }, [employees]);
   const [currentView, setCurrentView] = useState<string>('list');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [focusEmployeeId, setFocusEmployeeId] = useState<string | null>(null);
+
+  const handleEmployeesChange = useCallback((updater: (prev: Employee[]) => Employee[]) => {
+    setEmployees(prev => updater(prev));
+  }, []);
+
+  const handleAddEmployeeClick = useCallback(() => {
+    setFocusEmployeeId(null);
+    setCurrentView('quickAdd');
+    setIsQuickAddOpen(true);
+  }, []);
+
+  const handleQuickAddClose = useCallback(() => {
+    setIsQuickAddOpen(false);
+    setCurrentView('list');
+  }, []);
+
+  const handleQuickAddSubmit = useCallback((draft: Omit<Employee, 'id' | 'metadata'>) => {
+    const now = new Date();
+    const newEmployee: Employee = {
+      ...draft,
+      id: `emp_${now.getTime()}`,
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        createdBy: 'agent',
+        lastModifiedBy: 'agent'
+      }
+    };
+    setEmployees(prev => [newEmployee, ...prev]);
+    setFocusEmployeeId(newEmployee.id);
+  }, []);
 
   useEffect(() => {
     if (currentView === 'quickAdd') {
       setIsQuickAddOpen(true);
+    } else {
+      setIsQuickAddOpen(false);
     }
   }, [currentView]);
 
@@ -182,7 +222,13 @@ const App: React.FC = () => {
             {views.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setCurrentView(tab.id)}
+                onClick={() => {
+                  if (tab.id === 'quickAdd') {
+                    handleAddEmployeeClick();
+                  } else {
+                    setCurrentView(tab.id);
+                  }
+                }}
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${
                   currentView === tab.id
                     ? 'border-blue-500 text-blue-600 bg-blue-50'
@@ -205,31 +251,35 @@ const App: React.FC = () => {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'list' && <EmployeeListContainer />}
+        {currentView === 'list' && (
+          <EmployeeListContainer
+            employees={employees}
+            onEmployeesChange={handleEmployeesChange}
+            onAddEmployee={handleAddEmployeeClick}
+            focusEmployeeId={focusEmployeeId}
+          />
+        )}
         {currentView === 'gallery' && (
-          <EmployeePhotoGallery employees={employeesState} teams={teams} />
+          <EmployeePhotoGallery employees={employees} teams={teams} />
         )}
         {currentView === 'performance' && (
-          <PerformanceMetricsView employees={employeesState} />
+          <PerformanceMetricsView employees={employees} />
         )}
         {currentView === 'quickAdd' && isQuickAddOpen && (
           <div className="max-w-2xl mx-auto">
             <QuickAddEmployee
               teams={teams}
               isOpen={isQuickAddOpen}
-              onClose={() => {
-                setIsQuickAddOpen(false);
-                setCurrentView('list');
-              }}
-              onSubmit={() => {}}
+              onClose={handleQuickAddClose}
+              onSubmit={handleQuickAddSubmit}
             />
           </div>
         )}
         {currentView === 'statusManager' && (
-          <EmployeeStatusManager employees={employeesState} />
+          <EmployeeStatusManager employees={employees} />
         )}
         {currentView === 'certifications' && (
-          <CertificationTracker employees={employeesState} />
+          <CertificationTracker employees={employees} />
         )}
         {currentView === 'skills' && (
           <div className="text-center py-16 border-2 border-dashed border-gray-300 rounded-xl">

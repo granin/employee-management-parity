@@ -1,7 +1,7 @@
 // /Users/m/Documents/wfm/competitor/naumen/employee-management/src/components/EmployeeListContainer.tsx
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Employee, Team, EmployeeFilters, ViewModes, EmployeeStatus } from '../types/employee';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Employee, EmployeeFilters, EmployeeStatus, Team } from '../types/employee';
 import EmployeeEditDrawer from './EmployeeEditDrawer';
 
 // ========================
@@ -10,8 +10,10 @@ import EmployeeEditDrawer from './EmployeeEditDrawer';
 // ========================
 
 interface EmployeeListContainerProps {
-  teamId?: string;
-  showAll?: boolean;
+  employees: Employee[];
+  onEmployeesChange: (updater: (prev: Employee[]) => Employee[]) => void;
+  onAddEmployee: () => void;
+  focusEmployeeId?: string | null;
 }
 
 const STATUS_LABELS: Record<EmployeeStatus, string> = {
@@ -30,17 +32,17 @@ const STATUS_BADGE_CLASSES: Record<EmployeeStatus, string> = {
   terminated: 'bg-red-100 text-red-800'
 };
 
-const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({ 
-  teamId, 
-  showAll = true 
+const COLUMN_STORAGE_KEY = 'employee-management:list-columns';
+const FILTER_STORAGE_KEY = 'employee-management:list-filters';
+
+const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
+  employees,
+  onEmployeesChange,
+  onAddEmployee,
+  focusEmployeeId = null
 }) => {
-  // State management following Chat 6 patterns
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewModes['current']>('grid');
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
-  const [activeEmployee, setActiveEmployee] = useState<Employee | null>(null);
+  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(focusEmployeeId);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState({
     fio: true,
@@ -57,10 +59,14 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   const [tagError, setTagError] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importSummary, setImportSummary] = useState<string | null>(null);
+  const hasLoadedColumns = useRef(false);
+  const hasLoadedFilters = useRef(false);
 
-  const createDefaultFilters = useCallback((): EmployeeFilters => ({
+  const buildDefaultFilters = useCallback((): EmployeeFilters => ({
     search: '',
-    team: teamId || '',
+    team: '',
     status: '',
     skill: '',
     position: '',
@@ -68,178 +74,96 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     sortBy: 'name',
     sortOrder: 'asc',
     showInactive: false
-  }), [teamId]);
+  }), []);
 
-  const [filters, setFilters] = useState<EmployeeFilters>(createDefaultFilters);
+  const [filters, setFilters] = useState<EmployeeFilters>(buildDefaultFilters);
+  const defaultFilters = useMemo(() => buildDefaultFilters(), [buildDefaultFilters]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
 
-  // Mock data with realistic structure (following Chat 6 data patterns)
-  const generateMockEmployees = (): Employee[] => {
-    return [
-      {
-        id: 'emp_001',
-        employeeId: 'EMP001',
-        status: 'active',
-        personalInfo: {
-          firstName: 'Динара',
-          lastName: 'Абдуллаева',
-          middleName: 'Ивановна',
-          email: 'dinara.abdullaeva@company.com',
-          phone: '+996555123456',
-          photo: 'https://i.pravatar.cc/150?img=1',
-          address: 'г. Бишкек, проспект Манаса 12',
-          emergencyContact: {
-            name: 'Марат Абдуллаев',
-            phone: '+996555123457',
-            relationship: 'супруг'
-          }
-        },
-        credentials: {
-          wfmLogin: 'manager1',
-          externalLogins: ['1.1'],
-          passwordSet: true,
-          passwordLastUpdated: new Date('2024-01-05')
-        },
-        workInfo: {
-          position: 'Старший оператор',
-          team: {
-            id: 't1',
-            name: 'Группа поддержки',
-            color: '#3b82f6',
-            managerId: 'mgr_001',
-            memberCount: 12,
-            targetUtilization: 0.85
-          },
-          manager: 'Иванов И.И.',
-          hireDate: new Date('2022-03-15'),
-          contractType: 'full-time',
-          salary: 45000,
-          workLocation: 'Офис Бишкек',
-          department: 'Клиентская поддержка'
-        },
-        orgPlacement: {
-          orgUnit: 'Отдел качества',
-          office: 'Офис Бишкек',
-          timeZone: 'Europe/Moscow',
-          hourNorm: 40,
-          workScheme: {
-            id: 'scheme-admin',
-            name: 'Административный график',
-            effectiveFrom: new Date('2022-03-15')
-          }
-        },
-        skills: [
-          {
-            id: 's1',
-            name: 'Консультирование клиентов',
-            level: 5,
-            category: 'communication',
-            verified: true,
-            lastAssessed: new Date('2024-01-15'),
-            assessor: 'Иванов И.И.',
-            certificationRequired: false,
-            priority: 1
-          },
-          {
-            id: 's2',
-            name: 'CRM система',
-            level: 4,
-            category: 'technical',
-            verified: true,
-            lastAssessed: new Date('2024-02-01'),
-            assessor: 'Петров А.В.',
-            certificationRequired: true,
-            priority: 2
-          }
-        ],
-        reserveSkills: [
-          {
-            id: 's3',
-            name: 'Очередь 3',
-            level: 3,
-            category: 'product',
-            verified: false,
-            lastAssessed: new Date('2023-10-20'),
-            assessor: 'Сидоров К.К.',
-            certificationRequired: false,
-            priority: 3
-          }
-        ],
-        tags: ['Плавающий', 'Норма часов', 'План'],
-        preferences: {
-          preferredShifts: ['morning', 'day'],
-          notifications: {
-            email: true,
-            sms: true,
-            push: true,
-            scheduleChanges: true,
-            announcements: true,
-            reminders: true
-          },
-          language: 'ru',
-          workingHours: {
-            start: '08:00',
-            end: '17:00'
-          }
-        },
-        performance: {
-          averageHandleTime: 7.5,
-          callsPerHour: 12.5,
-          qualityScore: 94,
-          adherenceScore: 87,
-          customerSatisfaction: 4.8,
-          lastEvaluation: new Date('2024-01-30')
-        },
-        certifications: [],
-        metadata: {
-          createdAt: new Date('2022-03-15'),
-          updatedAt: new Date('2024-02-15'),
-          createdBy: 'admin_001',
-          lastModifiedBy: 'mgr_001',
-          lastLogin: new Date('2024-02-14T09:30:00')
-        }
-      }
-    ];
-  };
-  const defaultFilters = useMemo(() => createDefaultFilters(), [createDefaultFilters]);
+  useEffect(() => {
+    setActiveEmployeeId(focusEmployeeId ?? null);
+  }, [focusEmployeeId]);
+
+  const activeEmployee = useMemo(() => {
+    if (!activeEmployeeId) {
+      return null;
+    }
+    return employees.find(emp => emp.id === activeEmployeeId) ?? null;
+  }, [employees, activeEmployeeId]);
 
   useEffect(() => {
-    setFilters(defaultFilters);
-  }, [defaultFilters]);
+    if (typeof window === 'undefined') {
+      hasLoadedColumns.current = true;
+      return;
+    }
 
-  // Load employees (following Chat 6 async patterns)
-  useEffect(() => {
-    const loadEmployees = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        
-        const mockData = generateMockEmployees();
-        setEmployees(mockData);
-      } catch (err) {
-        setError('Ошибка загрузки данных сотрудников. Попробуйте еще раз.');
-        console.error('Employee loading error:', err);
-      } finally {
-        setLoading(false);
+    try {
+      const storedColumns = window.localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (storedColumns) {
+        const parsed = JSON.parse(storedColumns) as Partial<typeof columnVisibility>;
+        setColumnVisibility(prev => {
+          hasLoadedColumns.current = true;
+          return { ...prev, ...parsed };
+        });
+        return;
       }
-    };
+    } catch (storageError) {
+      console.warn('Не удалось восстановить настройки колонок', storageError);
+    }
 
-    loadEmployees();
-  }, [teamId]);
+    hasLoadedColumns.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedColumns.current || typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      hasLoadedFilters.current = true;
+      return;
+    }
+
+    try {
+      const storedFilters = window.localStorage.getItem(FILTER_STORAGE_KEY);
+      if (storedFilters) {
+        const parsed = JSON.parse(storedFilters) as Partial<EmployeeFilters>;
+        setFilters(prev => {
+          hasLoadedFilters.current = true;
+          return { ...prev, ...parsed };
+        });
+        return;
+      }
+    } catch (storageError) {
+      console.warn('Не удалось восстановить фильтры сотрудников', storageError);
+    }
+
+    hasLoadedFilters.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedFilters.current || typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
+
 
   useEffect(() => {
     setShowBulkActions(selectedEmployees.size > 0);
   }, [selectedEmployees]);
 
   useEffect(() => {
-    if (activeEmployee && !employees.some(emp => emp.id === activeEmployee.id)) {
-      setActiveEmployee(null);
+    if (activeEmployeeId && !employees.some(emp => emp.id === activeEmployeeId)) {
+      setActiveEmployeeId(null);
     }
-  }, [employees, activeEmployee]);
+  }, [employees, activeEmployeeId]);
 
   const columnOrder = useMemo(() => (
     [
@@ -385,10 +309,10 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   }, [sortedEmployees]);
 
   useEffect(() => {
-    if (activeEmployee && !sortedEmployees.some(emp => emp.id === activeEmployee.id)) {
-      setActiveEmployee(null);
+    if (activeEmployeeId && !sortedEmployees.some(emp => emp.id === activeEmployeeId)) {
+      setActiveEmployeeId(null);
     }
-  }, [activeEmployee, sortedEmployees]);
+  }, [activeEmployeeId, sortedEmployees]);
 
   const totalCount = employees.length;
   const visibleCount = sortedEmployees.length;
@@ -404,13 +328,59 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     );
   }, [filters, defaultFilters]);
 
+  const filterChips = useMemo(() => {
+    const chips: Array<{ key: keyof EmployeeFilters; label: string; value?: string }> = [];
+
+    if (filters.search.trim()) {
+      chips.push({ key: 'search', label: 'Поиск', value: filters.search.trim() });
+    }
+
+    if (filters.team) {
+      const teamName = teamOptions.find(team => team.id === filters.team)?.name ?? filters.team;
+      chips.push({ key: 'team', label: 'Команда', value: teamName });
+    }
+
+    if (filters.status) {
+      const statusKey = filters.status as EmployeeStatus;
+      chips.push({ key: 'status', label: 'Статус', value: STATUS_LABELS[statusKey] });
+    }
+
+    if (filters.position) {
+      chips.push({ key: 'position', label: 'Должность', value: filters.position });
+    }
+
+    if (filters.orgUnit) {
+      chips.push({ key: 'orgUnit', label: 'Точка оргструктуры', value: filters.orgUnit });
+    }
+
+    if (filters.showInactive) {
+      chips.push({ key: 'showInactive', label: 'Показывать уволенных' });
+    }
+
+    return chips;
+  }, [filters, teamOptions]);
+
   const handleFilterChange = useCallback(<K extends keyof EmployeeFilters>(key: K, value: EmployeeFilters[K]) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  const handleResetFilters = useCallback(() => {
-    setFilters({ ...defaultFilters });
+  const clearFilter = useCallback(<K extends keyof EmployeeFilters>(key: K) => {
+    setFilters(prev => ({ ...prev, [key]: defaultFilters[key] }));
   }, [defaultFilters]);
+
+  const handleRemoveChip = useCallback((key: keyof EmployeeFilters) => {
+    clearFilter(key);
+  }, [clearFilter]);
+
+  const exportFilename = useMemo(() => `employees_export_${new Date().toISOString().slice(0, 10)}.csv`, []);
+
+  const handleResetFilters = useCallback(() => {
+    const reset = buildDefaultFilters();
+    setFilters(reset);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(FILTER_STORAGE_KEY);
+    }
+  }, [buildDefaultFilters]);
 
   const toggleEmployeeSelection = useCallback((employeeId: string) => {
     setSelectedEmployees(prev => {
@@ -447,9 +417,9 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   const formatDate = (date: Date) => date.toLocaleDateString('ru-RU');
 
   const handleEmployeeUpdate = useCallback((updatedEmployee: Employee) => {
-    setEmployees(prev => prev.map(emp => (emp.id === updatedEmployee.id ? updatedEmployee : emp)));
-    setActiveEmployee(updatedEmployee);
-  }, []);
+    onEmployeesChange(prev => prev.map(emp => (emp.id === updatedEmployee.id ? updatedEmployee : emp)));
+    setActiveEmployeeId(updatedEmployee.id);
+  }, [onEmployeesChange]);
 
   const toggleColumnVisibility = (key: keyof typeof columnVisibility) => {
     setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
@@ -466,6 +436,10 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       status: true,
       hireDate: true
     });
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(COLUMN_STORAGE_KEY);
+    }
   };
 
   const handleApplyTags = () => {
@@ -484,7 +458,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       return;
     }
 
-    setEmployees(prev => prev.map(emp => {
+    onEmployeesChange(prev => prev.map(emp => {
       if (!selectedEmployees.has(emp.id)) {
         return emp;
       }
@@ -505,37 +479,96 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     setShowTagManager(false);
   };
 
-  // Loading state (following Chat 6 loading patterns)
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-gray-900">Загрузка сотрудников...</p>
-            <p className="text-sm text-gray-600">Получение данных из системы</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const openImportModal = () => {
+    setImportSummary(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setShowImportModal(true);
+  };
 
-  // Error state (following Chat 6 error patterns)
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-        <div className="text-red-600 text-6xl mb-4">⚠️</div>
-        <h3 className="text-lg font-semibold text-red-900 mb-2">Ошибка загрузки данных</h3>
-        <p className="text-red-700 mb-4">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-        >
-          Попробовать снова
-        </button>
-      </div>
+  const closeImportModal = () => {
+    setImportSummary(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setShowImportModal(false);
+  };
+
+  const handleImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setImportSummary(null);
+      return;
+    }
+
+    const sizeKb = (file.size / 1024).toFixed(1);
+    setImportSummary(`${file.name} • ${sizeKb} КБ`);
+  };
+
+  const triggerImportFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const closeExportModal = () => {
+    setShowExportModal(false);
+  };
+
+  const handleDownloadCsv = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const visibleColumns = columnOrder.filter(column => columnVisibility[column.key]);
+    const columnsForExport = visibleColumns.length > 0
+      ? visibleColumns
+      : ([{ key: 'fio' as const, label: 'Ф.И.О.' }] as Array<typeof columnOrder[number]>);
+    const headers = columnsForExport.map(column => column.label);
+
+    const formatCell = (employee: Employee, key: typeof columnOrder[number]['key']) => {
+      switch (key) {
+        case 'fio':
+          return `${employee.personalInfo.lastName} ${employee.personalInfo.firstName} ${employee.personalInfo.middleName ?? ''}`.trim();
+        case 'position':
+          return employee.workInfo.position;
+        case 'orgUnit':
+          return employee.orgPlacement.orgUnit;
+        case 'team':
+          return employee.workInfo.team.name;
+        case 'scheme':
+          return employee.orgPlacement.workScheme?.name ?? '';
+        case 'hourNorm':
+          return employee.orgPlacement.hourNorm ? `${employee.orgPlacement.hourNorm}` : '';
+        case 'status':
+          return STATUS_LABELS[employee.status];
+        case 'hireDate':
+          return formatDate(employee.workInfo.hireDate);
+        default:
+          return '';
+      }
+    };
+
+    const rows = sortedEmployees.map(employee =>
+      columnsForExport.map(column => formatCell(employee, column.key))
     );
-  }
+
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csvMatrix = [headers, ...rows];
+    const csvContent = csvMatrix
+      .map(row => row.map(cell => escapeCsv(String(cell ?? ''))).join(';'))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const filename = exportFilename;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.URL.revokeObjectURL(url);
+
+    setShowExportModal(false);
+  }, [columnOrder, columnVisibility, sortedEmployees, exportFilename]);
 
   return (
     <>
@@ -558,6 +591,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             </button>
             <button
               type="button"
+              onClick={onAddEmployee}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
               + Новый сотрудник
@@ -619,7 +653,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setShowImportModal(true)}
+                onClick={openImportModal}
                 className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 ⬇️ Импортировать
@@ -654,6 +688,27 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </button>
             </div>
           </div>
+
+          {filterChips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {filterChips.map(chip => (
+                <span
+                  key={`${chip.key}-${chip.value ?? 'value'}`}
+                  className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-3 py-1 text-sm"
+                >
+                  <span className="text-sm">{chip.value ? `${chip.label}: ${chip.value}` : chip.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveChip(chip.key)}
+                    className="text-blue-600 hover:text-blue-800 focus:outline-none"
+                    aria-label={`Удалить фильтр ${chip.label}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {showFilters && (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -804,7 +859,15 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                 return (
                   <tr
                     key={employee.id}
-                    onClick={() => setActiveEmployee(employee)}
+                    tabIndex={0}
+                    onClick={() => setActiveEmployeeId(employee.id)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setActiveEmployeeId(employee.id);
+                      }
+                    }}
+                    aria-selected={isActiveRow}
                     className={`cursor-pointer transition-colors ${isActiveRow ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3">
@@ -999,7 +1062,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       )}
 
       {showImportModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => setShowImportModal(false)}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={closeImportModal}>
           <div
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
             onClick={event => event.stopPropagation()}
@@ -1011,7 +1074,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setShowImportModal(false)}
+                onClick={closeImportModal}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="Закрыть"
               >
@@ -1023,14 +1086,38 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               <p>2. Проверьте форматы дат и соответствие значений справочникам (см. Appendix 1).</p>
               <p>3. Загрузите файл в модуле &laquo;Импорт&raquo;. Система покажет ошибки в отчёте.</p>
               <p className="text-xs text-gray-500">Дополнительно: Appendix 3 — навыки, Appendix 6 — теги.</p>
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={triggerImportFilePicker}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Выбрать файл
+                </button>
+                {importSummary ? (
+                  <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-3 py-2">
+                    <span className="text-sm font-medium">{importSummary}</span>
+                    <span className="text-xs text-blue-600">Файл принят, проверка запустится после закрытия окна</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">Поддерживаются .xlsx, .xls, .csv</p>
+                )}
+              </div>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleImportFileChange}
+            />
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
               <button
                 type="button"
-                onClick={() => setShowImportModal(false)}
+                onClick={closeImportModal}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
               >
-                Понятно
+                Готово
               </button>
             </div>
           </div>
@@ -1038,7 +1125,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       )}
 
       {showExportModal && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={() => setShowExportModal(false)}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center" onClick={closeExportModal}>
           <div
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
             onClick={event => event.stopPropagation()}
@@ -1050,7 +1137,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setShowExportModal(false)}
+                onClick={closeExportModal}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="Закрыть"
               >
@@ -1060,19 +1147,19 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
               <p>Файл формируется в CSV/Excel и повторяет структуру Appendix 1 для удобства обратного импорта.</p>
               <p>Колонки берутся из текущей конфигурации &laquo;Настройки отображения&raquo;.</p>
-              <p className="text-xs text-gray-500">Имя файла: employees_export_{new Date().toISOString().slice(0, 10)}.csv</p>
+              <p className="text-xs text-gray-500">Имя файла: {exportFilename}</p>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowExportModal(false)}
+                onClick={closeExportModal}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Отмена
               </button>
               <button
                 type="button"
-                onClick={() => setShowExportModal(false)}
+                onClick={handleDownloadCsv}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
               >
                 Скачать CSV
@@ -1085,7 +1172,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       <EmployeeEditDrawer
         employee={activeEmployee}
         isOpen={Boolean(activeEmployee)}
-        onClose={() => setActiveEmployee(null)}
+        onClose={() => setActiveEmployeeId(null)}
         onSave={handleEmployeeUpdate}
       />
     </>

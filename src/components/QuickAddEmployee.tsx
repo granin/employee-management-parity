@@ -35,6 +35,44 @@ interface QuickFormData {
   tags: string;
 }
 
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i',
+  й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't',
+  у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y',
+  ь: '', э: 'e', ю: 'yu', я: 'ya'
+};
+
+const transliterate = (value: string) =>
+  value
+    .toLowerCase()
+    .split('')
+    .map(char => CYRILLIC_TO_LATIN[char] ?? char)
+    .join('')
+    .replace(/[^a-z0-9.]/g, '');
+
+const parseCommaSeparated = (value: string) =>
+  value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+
+const buildLoginSuggestion = (data: QuickFormData) => {
+  const last = transliterate(data.lastName);
+  const first = transliterate(data.firstName);
+  const middle = transliterate(data.middleName);
+  const parts = [last, first ? first[0] : '', middle ? middle[0] : ''].filter(Boolean);
+  if (parts.length > 0) {
+    return parts.join('.');
+  }
+
+  if (data.email) {
+    const emailLoginPart = data.email.split('@')[0] ?? '';
+    return transliterate(emailLoginPart);
+  }
+
+  return '';
+};
+
 const createInitialForm = (): QuickFormData => ({
   firstName: '',
   lastName: '',
@@ -68,12 +106,14 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<QuickFormData>(createInitialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof QuickFormData, string>>>({});
+  const [isLoginManuallyEdited, setIsLoginManuallyEdited] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setStep(1);
       setFormData(createInitialForm());
       setErrors({});
+      setIsLoginManuallyEdited(false);
     }
   }, [isOpen]);
 
@@ -120,11 +160,26 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
   };
 
   const handleInputChange = (field: keyof QuickFormData, value: string) => {
+    if (field === 'wfmLogin') {
+      setIsLoginManuallyEdited(true);
+    }
+
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
   };
+
+  useEffect(() => {
+    if (isLoginManuallyEdited) {
+      return;
+    }
+
+    const suggestion = buildLoginSuggestion(formData);
+    if (suggestion !== formData.wfmLogin) {
+      setFormData(prev => ({ ...prev, wfmLogin: suggestion }));
+    }
+  }, [formData.firstName, formData.lastName, formData.middleName, formData.email, formData.wfmLogin, isLoginManuallyEdited]);
 
   const handleNext = () => {
     if (validateStep(step)) {
@@ -137,10 +192,7 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
   };
 
   const buildSkills = (rawSkills: string, assessor: string) => {
-    const entries = rawSkills
-      .split(',')
-      .map(skill => skill.trim())
-      .filter(Boolean);
+    const entries = parseCommaSeparated(rawSkills);
 
     return entries.map((name, index) => ({
       id: `quick_skill_${Date.now()}_${index}`,
@@ -167,15 +219,11 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
       }
 
       const employeeId = `EMP${Date.now().toString().slice(-4)}`;
-      const fallbackLogin = formData.email ? formData.email.split('@')[0] : `user${Date.now().toString().slice(-4)}`;
-      const externalLogins = formData.externalLogins
-        .split(',')
-        .map(login => login.trim())
-        .filter(Boolean);
-      const parsedTags = formData.tags
-        .split(',')
-        .map(tag => tag.trim())
-        .filter(Boolean);
+      const emailLoginPart = formData.email ? formData.email.split('@')[0] ?? '' : '';
+      const suggestion = buildLoginSuggestion(formData);
+      const fallbackLogin = suggestion || transliterate(emailLoginPart) || `user${Date.now().toString().slice(-4)}`;
+      const externalLogins = parseCommaSeparated(formData.externalLogins);
+      const parsedTags = parseCommaSeparated(formData.tags);
       const parsedSkills = buildSkills(formData.skills, formData.manager);
       const hourNormValue = Number(formData.hourNorm) || 40;
 
@@ -274,6 +322,9 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
   const progressSteps = useMemo(() => Array.from({ length: TOTAL_STEPS }, (_, index) => index + 1), []);
   const currentStep = Math.min(step, TOTAL_STEPS);
   const teamName = teams.find(t => t.id === formData.teamId)?.name ?? '—';
+  const tagChips = useMemo(() => parseCommaSeparated(formData.tags), [formData.tags]);
+  const skillChips = useMemo(() => parseCommaSeparated(formData.skills), [formData.skills]);
+  const externalLoginChips = useMemo(() => parseCommaSeparated(formData.externalLogins), [formData.externalLogins]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -412,6 +463,11 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
                   {errors.wfmLogin && (
                     <p className="mt-1 text-xs text-red-600">{errors.wfmLogin}</p>
                   )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {isLoginManuallyEdited
+                      ? 'Логин зафиксирован вручную.'
+                      : 'Мы предлагаем логин автоматически на основе ФИО — при необходимости отредактируйте.'}
+                  </p>
                 </div>
 
                 <div>
@@ -645,10 +701,43 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({
                 <p><span className="font-medium">Должность:</span> {formData.position}</p>
                 <p><span className="font-medium">Команда:</span> {teamName}</p>
                 <p><span className="font-medium">Логин WFM:</span> {formData.wfmLogin || 'будет сгенерирован'}</p>
+                <p><span className="font-medium">Внешние логины:</span> {externalLoginChips.length > 0 ? externalLoginChips.join(', ') : '—'}</p>
                 <p><span className="font-medium">Точка оргструктуры:</span> {formData.orgUnit || teamName}</p>
                 <p><span className="font-medium">Норма часов:</span> {formData.hourNorm || '40'} ч</p>
                 <p><span className="font-medium">Схема:</span> {formData.scheme || '—'}</p>
               </div>
+
+              {tagChips.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-gray-500">Теги</p>
+                  <div className="flex flex-wrap gap-2">
+                    {tagChips.map(tag => (
+                      <span
+                        key={`summary-tag-${tag}`}
+                        className="inline-flex items-center bg-blue-100 text-blue-700 rounded-full px-3 py-1 text-xs font-medium"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {skillChips.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-gray-500">Навыки</p>
+                  <div className="flex flex-wrap gap-2">
+                    {skillChips.map(skill => (
+                      <span
+                        key={`summary-skill-${skill}`}
+                        className="inline-flex items-center bg-emerald-100 text-emerald-700 rounded-full px-3 py-1 text-xs font-medium"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

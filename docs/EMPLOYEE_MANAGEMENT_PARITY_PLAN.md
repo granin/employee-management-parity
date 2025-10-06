@@ -110,9 +110,12 @@
 - [ ] Employee table renders with real column labels.
 - [ ] Column picker opens/toggles visibility.
 - [ ] Filters show counts/responsive to interactions.
+- [ ] Column and filter preferences persist after reload.
 - [ ] Row click opens drawer with required/optional sections.
 - [ ] Quick add wizard steps match real workflow.
+- [ ] Quick add summary chips display tags/skills/logins correctly.
 - [ ] Russian translations match screenshots/docs.
+- [ ] Import/Export stubs show expected copy and accept sample file uploads.
 
 ## 10. Open Questions
 - Do we retain Photo Gallery and Performance tabs as custom additions?
@@ -131,7 +134,7 @@
 - Incorporate any mandatory steps/macros/logging formats from these docs into agent task templates.
 
 ## 12. Next Immediate Steps
-1. Confirm screenshot interpretations in Section 2 against parity report.
-2. Clean proxy settings and confirm npm toolchain works.
-3. Begin Phase 2: define shared form models and mock data.
-4. Draft agent task templates using MAGIC PROMPTS/HUMAN_LAYER guidance.
+1. Capture updated screenshots: toolbar filter chips + persistence confirmation, quick add summary chips.
+2. Hand prepared agent prompt the new CSV export/import instructions for sandbox validation.
+3. Draft follow-up story for editable skills/reserve skills management in the drawer.
+4. Outline API integration requirements for import/export endpoints (success + error flows).
