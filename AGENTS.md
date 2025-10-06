@@ -42,6 +42,10 @@ Open the printed URL and ensure:
 - `docs/EMPLOYEE_MANAGEMENT_PARITY_PLAN.md` – current backlog & status.
 - `docs/SCREENSHOT_INDEX.md` – alias ↔ screenshot mapping.
 - `docs/AGENT_PARITY_REPORT.md` – browser-agent comparison report.
+- `docs/Tasks/parity-backlog-and-plan.md` – detailed next actions per parity phase.
+- `docs/SOP/standard-operating-procedures.md` – workflow checklist (UI, tests, deploys).
+- `docs/SOP/ui-walkthrough-checklist.md` – step-by-step validation script.
+- `docs/System/employee-management-overview.md` – module/data summary.
 
 ---
 ## Agent Login (Real System)
