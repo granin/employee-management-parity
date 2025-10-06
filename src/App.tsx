@@ -172,9 +172,6 @@ const App: React.FC = () => {
                 Управление сотрудниками - 1010.ru
               </h1>
             </div>
-            <div className="text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full">
-              15+ компонентов ✅ Полная интеграция
-            </div>
           </div>
         </div>
       </header>
