@@ -83,6 +83,7 @@ const buildEmployeePayload = (login: string, password: string, team: Team): Omit
         start: '09:00',
         end: '18:00',
       },
+      schemePreferences: ['Административный график'],
     },
     performance: {
       averageHandleTime: 0,
@@ -93,6 +94,9 @@ const buildEmployeePayload = (login: string, password: string, team: Team): Omit
       lastEvaluation: new Date(),
     },
     certifications: [],
+    personnelNumber: `PN-${timestamp.toString().slice(-5)}`,
+    actualAddress: displayTeam.description ? `Офис ${displayTeam.description}` : 'Офис 1010.ru, ул. Токтогула 12',
+    tasks: ['Проверка учётных данных', 'Назначение наставника'],
   };
 };
 

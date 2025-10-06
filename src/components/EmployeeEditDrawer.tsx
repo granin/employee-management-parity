@@ -37,6 +37,15 @@ interface FormState {
     manager: string;
     hireDate: string;
   };
+  preferences: {
+    preferredShifts: string;
+    schemePreferences: string;
+  };
+  additional: {
+    personnelNumber: string;
+    actualAddress: string;
+    tasks: string;
+  };
   tags: string;
   status: EmployeeStatus;
 }
@@ -119,6 +128,15 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
           manager: typeof employee.workInfo.manager === 'string' ? employee.workInfo.manager : employee.workInfo.manager.fullName,
           hireDate: employee.workInfo.hireDate.toISOString().slice(0, 10)
         },
+        preferences: {
+          preferredShifts: employee.preferences.preferredShifts.join(', '),
+          schemePreferences: (employee.preferences.schemePreferences ?? []).join(', '),
+        },
+        additional: {
+          personnelNumber: employee.personnelNumber ?? '',
+          actualAddress: employee.actualAddress ?? employee.personalInfo.address ?? '',
+          tasks: (employee.tasks ?? []).join('\n'),
+        },
         tags: employee.tags.join(', '),
         status: employee.status
       });
@@ -142,7 +160,11 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
     event.stopPropagation();
   };
 
-const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' | 'workInfo', field: string, value: string) => {
+const handleChange = (
+  section: 'personalInfo' | 'credentials' | 'orgPlacement' | 'workInfo' | 'preferences' | 'additional',
+  field: string,
+  value: string
+) => {
     if (!formState) return;
 
     setFormState(prev => {
@@ -206,6 +228,24 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
       .map(login => login.trim())
       .filter(Boolean);
 
+    const preferredShifts = formState.preferences.preferredShifts
+      .split(',')
+      .map((shift) => shift.trim())
+      .filter(Boolean);
+
+    const schemePreferences = formState.preferences.schemePreferences
+      .split(',')
+      .map((scheme) => scheme.trim())
+      .filter(Boolean);
+
+    const tasks = formState.additional.tasks
+      .split(/\r?\n/)
+      .map((task) => task.trim())
+      .filter(Boolean);
+
+    const actualAddress = formState.additional.actualAddress.trim();
+    const personnelNumber = formState.additional.personnelNumber.trim();
+
     const updatedEmployee: Employee = {
       ...employee,
       status: formState.status,
@@ -250,6 +290,14 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
           ? new Date(formState.workInfo.hireDate)
           : employee.workInfo.hireDate
       },
+      preferences: {
+        ...employee.preferences,
+        preferredShifts: preferredShifts.length > 0 ? preferredShifts : employee.preferences.preferredShifts,
+        schemePreferences: schemePreferences.length > 0 ? schemePreferences : employee.preferences.schemePreferences,
+      },
+      personnelNumber: personnelNumber || undefined,
+      actualAddress: actualAddress || undefined,
+      tasks: tasks.length > 0 ? tasks : employee.tasks,
       tags: formState.tags
         .split(',')
         .map(tag => tag.trim())
@@ -616,6 +664,62 @@ const handleChange = (section: 'personalInfo' | 'credentials' | 'orgPlacement' |
                   <div className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50">
                     {reserveSkillsList || 'Резервные навыки не назначены'}
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Номер сотрудника</label>
+                  <input
+                    type="text"
+                    value={formState.additional.personnelNumber}
+                    onChange={(event) => handleChange('additional', 'personnelNumber', event.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="PN-001"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Предпочитаемые смены</label>
+                  <input
+                    type="text"
+                    value={formState.preferences.preferredShifts}
+                    onChange={(event) => handleChange('preferences', 'preferredShifts', event.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Утро, День"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Разделяйте смены запятыми, например «Утро, Вечер».</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Предпочитаемые схемы</label>
+                  <input
+                    type="text"
+                    value={formState.preferences.schemePreferences}
+                    onChange={(event) => handleChange('preferences', 'schemePreferences', event.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Административный график, Гибрид"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Если схем несколько, перечислите через запятую.</p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Фактический адрес</label>
+                  <textarea
+                    value={formState.additional.actualAddress}
+                    onChange={(event) => handleChange('additional', 'actualAddress', event.target.value)}
+                    className="w-full min-h-[72px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="г. Бишкек, ул. ..."
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Активные задачи</label>
+                  <textarea
+                    value={formState.additional.tasks}
+                    onChange={(event) => handleChange('additional', 'tasks', event.target.value)}
+                    className="w-full min-h-[92px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Каждая задача с новой строки"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Каждая строка превратится в отдельную запись в списке задач.</p>
                 </div>
               </div>
             </section>

@@ -49,4 +49,22 @@ test.describe('Employee list interactions', () => {
     await expect(page.getByText(`Логин WFM: ${QUICK_ADD_LOGIN}`)).toBeVisible();
     await page.locator('button:has-text("✕")').first().click();
   });
+
+  test('bulk edit drawer updates status for selected employees', async ({ page }) => {
+    const checkboxes = page.locator('tbody tr input[type="checkbox"]');
+    await checkboxes.nth(0).click();
+    await checkboxes.nth(1).click();
+
+    const bulkEditButton = page.locator('[aria-label="Открыть массовое редактирование"]').first();
+    await expect(bulkEditButton).toBeEnabled();
+    await bulkEditButton.click();
+    await expect(page.locator('#bulk-edit-status')).toBeVisible();
+
+    await page.getByLabel('Новый статус').selectOption('vacation');
+    await page.getByLabel('Комментарий / задача').fill('Назначено групповое обучение');
+    await page.getByRole('button', { name: 'Применить изменения' }).click();
+
+    await expect(page.locator('tbody tr').first().getByText('В отпуске')).toBeVisible();
+    await expect(page.locator('tbody tr').nth(1).getByText('В отпуске')).toBeVisible();
+  });
 });

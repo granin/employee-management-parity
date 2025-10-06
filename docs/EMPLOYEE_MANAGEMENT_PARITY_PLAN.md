@@ -48,6 +48,8 @@
 - Converted quick add to the WFM-style minimal drawer (логин + пароль) and auto-open the full edit drawer for the new draft.
 - Reworked the employee list toolbar to icon buttons, added a bulk-edit stub, and switched row click to selection mode while exposing the edit drawer via the name button.
 - Labeled non-parity modules (галерея, показатели, статусы, сертификации, навыки) as demo-only so testers understand the current scope.
+- Expanded the employee edit drawer with WFM-only fields (смены, схемы, номер, фактический адрес, задачи) and kept the minimal create intro in place.
+- Implemented a working bulk-edit flow for status/team updates (plus optional комментарий) and added Playwright coverage for the happy path.
 
 
 ## 5. Feature Backlog (Delta vs Reality)
@@ -102,6 +104,7 @@
 - [ ] Quick add drawer (логин/пароль) creates a draft employee and opens the edit drawer.
 - [ ] Drawer exposes required fields (Фамилия/Имя/Отчество/Логин WFM/Пароль/Оргструктура/Норма часов) with validation.
 - [ ] Tag manager adds/removes tags across the current selection.
+- [ ] Массовое редактирование меняет статус/команду и добавляет комментарий в список задач.
 
 ## 10. Open Questions
 - Do we retain Photo Gallery and Performance tabs as custom additions?

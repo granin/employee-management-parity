@@ -7,29 +7,30 @@ This checklist maps directly to the outstanding gaps called out in `/Users/m/Des
 - Swapped quick add to the WFM-style login/password drawer and auto-opened the full edit drawer.
 - Reworked toolbar to icon actions, introduced a bulk-edit stub, and switched row click to selection mode.
 - Marked optional modules as demo-only and refreshed docs/tests (`AGENTS.md`, parity plan, Playwright spec).
+- Expanded the edit drawer with WFM-only fields (смены, схемы, задачи, номер) and tuned the create intro flow.
+- Delivered a functional bulk-edit drawer (status/team + комментарий) with optimistic updates and test coverage.
 
 ## Next Focus Areas
 
-### 1. Expand Employee Edit Drawer (Severity A)
+### 1. Manager Directory & Picker (Severity B)
 - **Files**: `src/components/EmployeeEditDrawer.tsx`, `src/types/employee.ts`.
-- Mirror the WFM drawer fields: shift preferences, tasks, personnel number, actual address, manager picker, etc.
-- Ensure inline edit + read-only blocks match WFM layout; add missing validation and helper copy.
-- Update tests to cover saving a subset of the new fields.
+- Replace the free-text manager field with a searchable selector backed by the seeded teams/mentors.
+- Surface helper copy for cases where the manager is outside the current directory.
+- Extend tests to cover manager reassignment.
 
-### 2. Bulk Actions & Tag Manager UX (Severity B)
-- **Files**: `src/components/EmployeeListContainer.tsx`, `src/components/TagManager` (inline), `tests/employee-list.spec.ts`.
-- Replace the bulk-edit stub with actionable controls (status changes, team transfer) or clearly scope the demo use cases.
-- Align the tag manager with WFM behaviour (tag catalogue, add/remove flows, shared state with selection mode).
-- Revisit selection affordances for keyboard users (focus states, helper hints).
+### 2. Tag Manager Enhancements (Severity B)
+- **Files**: `src/components/EmployeeListContainer.tsx`, inline tag manager section.
+- Introduce quick filters (по цвету/по тегу) and ensure removal badges are announced via `aria-live`.
+- Persist the tag catalogue between sessions so agents keep curated colors.
 
-### 3. Demo Module Scope Notes (Severity C)
-- **Files**: `src/components/EmployeePhotoGallery.tsx`, `src/components/PerformanceMetricsView.tsx`, `src/components/EmployeeStatusManager.tsx`, `src/components/CertificationTracker.tsx`.
-- For each demo-only module, add concise banners/tooltips explaining what is mocked versus parity-ready.
-- Ensure the parity plan tracks these scopes so reviewers know they are intentionally non-parity.
+### 3. Tasks Timeline & Notes (Severity C)
+- **Files**: `src/components/EmployeeEditDrawer.tsx`, `src/App.tsx`.
+- Render the task list as a timeline with created/updated timestamps and allow reordering (drag handles optional).
+- Add unit extenders so new bulk-edit comments display immediately in the drawer.
 
-### 4. Documentation & QA
-- Document the next milestones in `docs/EMPLOYEE_MANAGEMENT_PARITY_PLAN.md` and surface any open questions in `SESSION_HANDOFF.md`.
-- Extend Playwright coverage for bulk edit once functionality is ready.
+### 4. Documentation & Observability
+- Update `SESSION_HANDOFF.md` with new bulk-edit + drawer flows.
+- Capture fresh screenshots for the screenshot index once timelines/manager picker are live.
 - Standard run before handoff:
   ```bash
   npm run build

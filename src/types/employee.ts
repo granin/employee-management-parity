@@ -149,6 +149,9 @@ export interface Employee {
   performance: EmployeePerformance;
   certifications: Certification[];
   metadata: EmployeeMetadata;
+  personnelNumber?: string;
+  actualAddress?: string;
+  tasks?: string[];
 }
 
 export interface EmployeeFilters {
