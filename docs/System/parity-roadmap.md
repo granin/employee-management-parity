@@ -10,6 +10,7 @@ This document tracks the planned order of parity work across product modules and
   - Task timeline helper (`src/utils/task.ts`).
   - Import/export validation patterns (`EmployeeListContainer.tsx`).
   - Tag limit enforcement pattern (≤4 per employee).
+- **Employee Management (Phase 5)** – Stabilization (localStorage persistence + toast, validation gating, tag catalogue persistence, context-aware import/export headings, bulk-edit summary/count). NVDA sweep pending before closing the phase.
 
 ## Upcoming Modules
 1. **Schedule** (graphs, shifts, optimization UI)

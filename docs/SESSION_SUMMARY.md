@@ -2,9 +2,11 @@
 
 ## 1. High-Level Outcomes
 - Environment fixed for the parity repo (`~/git/client/employee-management-parity`); Node 20.x standardised (`docs/ENVIRONMENT_FIX_TODO.md`).
-- Phase 1–3 deliverables merged: employee list parity, selection mode, dismiss/restore, scheme-history readout, tag manager with four-tag cap, import/export validation (Теги + Отпуска), and expanded Playwright coverage.
-- UI content guidelines clarified (no “демо” suffixes, no tech names in copy) via `docs/System/ui-guidelines.md` and navigation updates.
-- Phase 4 scope defined (`docs/Tasks/phase-4-accessibility-and-final-parity.md`) to capture remaining accessibility + evidence tasks from the comprehensive parity report.
+- Phases 1–4 complete: selection mode + dismiss/restore parity, scheme-history readout, bulk-edit matrix with full add/replace/remove semantics, tag manager (≤4 cap), and import/export validation across Appendices 1/3/4/6/8.
+- Overlay accessibility tightened: bulk edit/tag manager/column settings/import/export wired with `aria-labelledby`/`aria-describedby`, live results announced via `role="status"`; VoiceOver sweep logged in `docs/SESSION_HANDOFF.md`.
+- Phase 5 stabilization underway: edit drawer saves persist via localStorage with toast/error handling, email/phone/hour-norm validation gates “Сохранить изменения”, tag catalogue survives refreshes, import/export copy/file prefixes reflect the selected context, and the bulk-edit drawer surfaces a scrollable selection list plus planned-change summary.
+- Playwright suite extended (validation gating, persistence after reload, tag-catalogue retention, dynamic modal headings, bulk-edit summary, skills/reserve add/remove) and green via `npm run test -- --reporter=list --project=chromium --workers=1` (32/32 passing).
+- Phase 4 task doc closed with linked evidence; Phase 5 PRD/backlog/status tables updated to reflect the new work.
 
 ## 2. Artifacts to Keep
 - Documentation: parity plan, backlog/PRDs, SOPs, handoff, session summary, UI guidelines, parity report, Phase 4 task doc.
@@ -14,10 +16,9 @@
 - External manuals (CH3–CH7) remain in `/Users/m/Documents/replica/...` for future validation.
 
 ## 3. Remaining Gaps / Follow-Up
-- Run NVDA/VoiceOver sweep; document findings + fixes.
-- Extend Playwright for skills/reserve add/remove and any outstanding CSV templates.
-- Document non-persistence and export category limitations; prepare handoff evidence.
-- Update screenshot index once new captures (selection banner, dismiss/restores, tag alerts) are produced.
+- Schedule an NVDA pass to mirror the VoiceOver log once hardware access is available.
+- Capture outstanding screenshots (selection banner, dismiss/restores timeline, tag-limit alert) and link via `docs/SCREENSHOT_INDEX.md`.
+- Coordinate with product/backend on next module parity scope (Schedule/Reporting) and outline API integration milestones once NVDA closes.
 
 ## 4. Operational Guardrails
 - Default workflow: `npm run build` → `npm run test -- --reporter=list --project=chromium --workers=1`.
@@ -25,6 +26,7 @@
 - Keep Magic Prompt / Human Layer guidance for agent orchestration but no longer reference legacy `~/git/client/naumen` paths.
 
 ## 5. Next Agent Checklist
-1. Review Phase 4 task doc + comprehensive parity report (`~/Desktop/2025-10-07_09-00_comprehensive-validation-report.markdown`).
-2. Execute the accessibility sweep; log results in `docs/SESSION_HANDOFF.md` and update backlog/PRDs.
-3. Finish Playwright coverage + screenshot refresh, then archive any superseded Desktop reports under `docs/Archive/` with a “pre-Oct 07” banner.
+1. Review `docs/Tasks/phase-5-stabilization-and-validation-prd.md` alongside `~/Desktop/ff.markdown` for the stabilization scope.
+2. Sync with product on next parity slice (Schedule/Reporting) using `docs/System/parity-roadmap.md` as baseline.
+3. Produce the missing screenshots and update `docs/SCREENSHOT_INDEX.md` + parity plan once captured.
+4. Plan NVDA verification and note findings in `docs/SESSION_HANDOFF.md` when executed.

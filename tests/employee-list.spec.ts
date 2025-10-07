@@ -5,6 +5,35 @@ const DRAWER_TEXT = 'Редактирование данных сотрудни�
 const getFirstRowCheckbox = (page: Page) => page.locator('tbody tr input[type="checkbox"]').first();
 const SELECTION_MODIFIER: 'Meta' | 'Control' = process.platform === 'darwin' ? 'Meta' : 'Control';
 
+const openImportModal = async (page: Page, context: string) => {
+  await page.locator('[title="Импортировать"]').first().click();
+  const optionButtons = page.locator(`button:has-text("${context}")`);
+  const count = await optionButtons.count();
+  const index = count > 1 ? 1 : 0;
+  await optionButtons.nth(index).click();
+  await expect(page.getByRole('heading', { name: /Импорт/ })).toBeVisible();
+};
+
+const openExportModal = async (page: Page, context: string) => {
+  await page.locator('[title="Экспортировать"]').first().click();
+  const optionButtons = page.locator(`button:has-text("${context}")`);
+  const count = await optionButtons.count();
+  const index = count > 1 ? 1 : 0;
+  await optionButtons.nth(index).click();
+  await expect(page.getByRole('heading', { name: /Экспорт/ })).toBeVisible();
+};
+
+const uploadFileThroughChooser = async (
+  page: Page,
+  file: { name: string; mimeType: string; buffer: Buffer }
+) => {
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Выбрать файл' }).click(),
+  ]);
+  await fileChooser.setFiles(file);
+};
+
 test.describe('Employee list interactions', () => {
   test.beforeEach(async ({ page }) => {
     page.on('pageerror', (error) => {
@@ -15,6 +44,18 @@ test.describe('Employee list interactions', () => {
         // eslint-disable-next-line no-console
         console.error('Console error:', message.text());
       }
+    });
+    await page.addInitScript(() => {
+      try {
+        const shouldPreserve = window.sessionStorage.getItem('preserve-local-storage');
+        if (shouldPreserve === 'true') {
+          window.sessionStorage.removeItem('preserve-local-storage');
+          return;
+        }
+      } catch (error) {
+        // ignore storage exceptions (e.g. disabled storage in tests)
+      }
+      window.localStorage.clear();
     });
     await page.goto('/');
     await expect(page.locator(ROW_SELECTOR).first()).toBeVisible();
@@ -188,6 +229,157 @@ test.describe('Employee list interactions', () => {
     await page.getByTestId('drawer-close-button').click();
   });
 
+  test('bulk edit skills and reserve skills add entries', async ({ page }) => {
+    const bulkEditButton = page.locator('button:has-text("Массовое редактирование")').first();
+    await bulkEditButton.click();
+
+    const firstRowCheckbox = page.locator('tbody tr input[type="checkbox"]').first();
+    await firstRowCheckbox.click();
+
+    await bulkEditButton.click();
+    await page.getByTestId('matrix-action-skills-add').click();
+    await page.locator('textarea[placeholder="CRM, Работа с возражениями"]').fill('Добавленный навык');
+
+    await page.getByTestId('matrix-action-reserveSkills-add').click();
+    await page.locator('textarea[placeholder="Английский, Чаты"]').fill('Добавленный резерв');
+
+    await page.getByRole('button', { name: 'Применить изменения' }).click();
+
+    await page.getByRole('button', { name: /Абдуллаева Динара/i }).click();
+    await expect(page.getByText(DRAWER_TEXT)).toBeVisible();
+    const skillsSummary = page.locator('label:has-text("Навыки")').locator('..').locator('div').first();
+    const reserveSummary = page.locator('label:has-text("Резервные навыки")').locator('..').locator('div').first();
+    await expect(skillsSummary).toContainText('Добавленный навык');
+    await expect(skillsSummary).toContainText('Консультирование клиентов');
+    await expect(reserveSummary).toContainText('Добавленный резерв');
+    await page.getByTestId('drawer-close-button').click();
+  });
+
+  test('bulk edit skills and reserve skills remove entries', async ({ page }) => {
+    const bulkEditButton = page.locator('button:has-text("Массовое редактирование")').first();
+    await bulkEditButton.click();
+
+    const firstRowCheckbox = page.locator('tbody tr input[type="checkbox"]').first();
+    await firstRowCheckbox.click();
+
+    await bulkEditButton.click();
+    await page.getByTestId('matrix-action-skills-remove').click();
+    await page.locator('textarea[placeholder="CRM, Работа с возражениями"]').fill('Консультирование клиентов');
+
+    await page.getByTestId('matrix-action-reserveSkills-remove').click();
+    await page.locator('textarea[placeholder="Английский, Чаты"]').fill('Очередь 3');
+
+    await page.getByRole('button', { name: 'Применить изменения' }).click();
+
+    await page.getByRole('button', { name: /Абдуллаева Динара/i }).click();
+    await expect(page.getByText(DRAWER_TEXT)).toBeVisible();
+    const skillsSummary = page.locator('label:has-text("Навыки")').locator('..').locator('div').first();
+    const reserveSummary = page.locator('label:has-text("Резервные навыки")').locator('..').locator('div').first();
+    await expect(skillsSummary).not.toContainText('Консультирование клиентов');
+    await expect(skillsSummary).toContainText('CRM система');
+    await expect(reserveSummary).toHaveText('Резервные навыки не назначены');
+    await page.getByTestId('drawer-close-button').click();
+  });
+
+  test('edit drawer disables save until required fields valid', async ({ page }) => {
+    await page.locator(ROW_SELECTOR).first().click();
+    const emailInput = page.locator('label:has-text("Email")').locator('..').locator('input');
+    const saveButton = page.getByRole('button', { name: /Сохран/ });
+    const originalEmail = await emailInput.inputValue();
+
+    await emailInput.fill('');
+    await page.locator('label:has-text("Телефон")').locator('..').locator('input').focus();
+    await expect(saveButton).toBeDisabled();
+    await expect(saveButton).toHaveAttribute('aria-disabled', 'true');
+
+    await emailInput.fill('dinara.updated@example.com');
+    await expect(saveButton).not.toBeDisabled();
+
+    await emailInput.fill(originalEmail);
+    await page.getByTestId('drawer-close-button').click();
+  });
+
+  test('saving drawer persists changes across reload', async ({ page }) => {
+    await page.locator(ROW_SELECTOR).first().click();
+    const hourNormInput = page.locator('label:has-text("Норма часов")').locator('..').locator('input');
+    const originalValue = await hourNormInput.inputValue();
+    const newValue = originalValue === '32' ? '38' : '32';
+
+    await hourNormInput.fill(newValue);
+    const saveButton = page.getByRole('button', { name: /Сохран/ });
+    await expect(saveButton).not.toBeDisabled();
+    await saveButton.click();
+    const saveToast = page.locator('div[role="status"]').filter({ hasText: 'Данные сотрудника' });
+    await expect(saveToast).toBeVisible();
+    await page.getByTestId('drawer-close-button').click();
+
+    await page.evaluate(() => {
+      window.sessionStorage.setItem('preserve-local-storage', 'true');
+    });
+    await page.reload();
+    await expect(page.locator(ROW_SELECTOR).first()).toBeVisible();
+
+    await page.locator(ROW_SELECTOR).first().click();
+    await expect(hourNormInput).toHaveValue(newValue);
+
+    await hourNormInput.fill(originalValue);
+    await page.getByRole('button', { name: /Сохран/ }).click();
+    await page.getByTestId('drawer-close-button').click();
+  });
+
+  test('tag manager catalogue persists without selection', async ({ page }) => {
+    await page.locator('button:has-text("Теги")').first().click();
+    await page.getByPlaceholder('Например: VIP').fill('Тестовый тег');
+    await page.getByRole('button', { name: 'Создать тег' }).click();
+    await expect(page.getByText('Тестовый тег')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.evaluate(() => {
+      window.sessionStorage.setItem('preserve-local-storage', 'true');
+    });
+    await page.reload();
+    await page.locator('button:has-text("Теги")').first().click();
+    await expect(page.getByText('Тестовый тег')).toBeVisible();
+    await page.getByRole('button', { name: 'Удалить тег Тестовый тег' }).click();
+    await expect(page.getByText('Тестовый тег')).not.toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('import modal shows context specific heading', async ({ page }) => {
+    await openImportModal(page, 'Навыки');
+    await expect(page.getByRole('heading', { name: 'Импорт навыков' })).toBeVisible();
+    await expect(page.getByText('Шаблон: Appendix 3')).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('export modal shows context specific heading', async ({ page }) => {
+    await openExportModal(page, 'Отпуска');
+    await expect(page.getByRole('heading', { name: 'Экспорт отпусков' })).toBeVisible();
+    await expect(page.getByText('Выгрузка сотрудников со статусом «В отпуске».')).toBeVisible();
+    await page.getByLabel('Закрыть экспорт').click();
+  });
+
+  test('bulk edit summary lists planned changes', async ({ page }) => {
+    const bulkEditButton = page.locator('button:has-text("Массовое редактирование")').first();
+    await bulkEditButton.click();
+    await page.locator('tbody tr input[type="checkbox"]').nth(0).click();
+    await page.locator('tbody tr input[type="checkbox"]').nth(1).click();
+    await bulkEditButton.click();
+
+    await page.getByTestId('matrix-action-status-replace').click();
+    await page.locator('#bulk-edit-status').selectOption('vacation');
+    await page.locator('#bulk-edit-comment').fill('Смена графика на отпускной период');
+
+    const summaryBlock = page.getByText('Предстоящие изменения').locator('..');
+    await expect(summaryBlock).toContainText('Статус → В отпуске');
+    await expect(summaryBlock).toContainText('Комментарий будет добавлен в таймлайн задач.');
+
+    const selectedBlock = page.getByText('Выбранные сотрудники').locator('..');
+    await expect(selectedBlock).toContainText('Всего: 2');
+
+    await page.getByRole('button', { name: 'Отмена' }).click();
+  });
+
   test('quick add modal restores focus to toolbar trigger on cancel', async ({ page }) => {
     const quickAddButton = page.getByTestId('toolbar-new-employee');
     await quickAddButton.click();
@@ -217,11 +409,9 @@ test.describe('Employee list interactions', () => {
   });
 
   test('import validation rejects unsupported tag file', async ({ page }) => {
-    await page.locator('[title="Импортировать"]').first().click();
-    await page.locator('button:has-text("Теги")').nth(1).click();
-    await expect(page.getByText('Импорт сотрудников')).toBeVisible();
+    await openImportModal(page, 'Теги');
 
-    await page.setInputFiles('input[type="file"]', {
+    await uploadFileThroughChooser(page, {
       name: 'tags.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('sample'),
@@ -231,13 +421,44 @@ test.describe('Employee list interactions', () => {
     await page.getByLabel('Закрыть импорт').click();
   });
 
+  test('import validation rejects employee csv with missing headers', async ({ page }) => {
+    await openImportModal(page, 'Сотрудника');
+
+    const csvContent = 'login,lastName,firstName,email\nuser1,Иванов,Иван,ivan@example.com';
+
+    await uploadFileThroughChooser(page, {
+      name: 'employees.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Отсутствуют обязательные колонки').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('import validation accepts employee csv with required headers', async ({ page }) => {
+    await openImportModal(page, 'Сотрудника');
+
+    const csvContent = [
+      'login,lastName,firstName,email,hiringDate,office,groupExternalId,positionExternalId,telephonyId,personnelNumber,schemeExternalId,calendarExternalId,timeZone',
+      'user1,Иванов,Иван,ivan@example.com,2024-01-01,Офис А,grp-1,pos-1,tel-1,PN-001,scheme-1,cal-1,Europe/Moscow',
+    ].join('\n');
+
+    await uploadFileThroughChooser(page, {
+      name: 'employees.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Файл «employees.csv» принят для раздела «Сотрудника»').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
   test('import validation rejects csv with missing headers', async ({ page }) => {
-    await page.locator('[title="Импортировать"]').first().click();
-    await page.locator('button:has-text("Теги")').nth(1).click();
-    await expect(page.getByText('Импорт сотрудников')).toBeVisible();
+    await openImportModal(page, 'Теги');
 
     const csvContent = 'login,ФИО\nuser1,Иванов Иван';
-    await page.setInputFiles('input[type="file"]', {
+    await uploadFileThroughChooser(page, {
       name: 'tags.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from(csvContent, 'utf-8'),
@@ -248,12 +469,10 @@ test.describe('Employee list interactions', () => {
   });
 
   test('import validation accepts csv with required headers', async ({ page }) => {
-    await page.locator('[title="Импортировать"]').first().click();
-    await page.locator('button:has-text("Теги")').nth(1).click();
-    await expect(page.getByText('Импорт сотрудников')).toBeVisible();
+    await openImportModal(page, 'Теги');
 
     const csvContent = 'login,ФИО,Тег\nuser1,Иванов Иван,VIP';
-    await page.setInputFiles('input[type="file"]', {
+    await uploadFileThroughChooser(page, {
       name: 'tags.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from(csvContent, 'utf-8'),
@@ -264,14 +483,10 @@ test.describe('Employee list interactions', () => {
   });
 
   test('import validation rejects vacation csv with missing headers', async ({ page }) => {
-    await page.locator('[title="Импортировать"]').first().click();
-    const importMenuItems = page.locator('button:has-text("Отпуска")');
-    await expect(importMenuItems.first()).toBeVisible();
-    await importMenuItems.first().click();
-    await expect(page.getByText('Импорт сотрудников')).toBeVisible();
+    await openImportModal(page, 'Отпуска');
 
     const csvContent = 'login,ФИО,Статус,Команда\nuser1,Иванов Иван,В отпуске,Группа поддержки';
-    await page.setInputFiles('input[type="file"]', {
+    await uploadFileThroughChooser(page, {
       name: 'vacations.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from(csvContent, 'utf-8'),
@@ -282,20 +497,72 @@ test.describe('Employee list interactions', () => {
   });
 
   test('import validation accepts vacation csv with required headers', async ({ page }) => {
-    await page.locator('[title="Импортировать"]').first().click();
-    const importMenuItems = page.locator('button:has-text("Отпуска")');
-    await expect(importMenuItems.first()).toBeVisible();
-    await importMenuItems.first().click();
-    await expect(page.getByText('Импорт сотрудников')).toBeVisible();
+    await openImportModal(page, 'Отпуска');
 
     const csvContent = 'login,ФИО,Статус,Команда,Комментарий\nuser1,Иванов Иван,В отпуске,Группа поддержки,Отпуск по графику';
-    await page.setInputFiles('input[type="file"]', {
+    await uploadFileThroughChooser(page, {
       name: 'vacations.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from(csvContent, 'utf-8'),
     });
 
     await expect(page.locator('text=Файл «vacations.csv» принят для раздела «Отпуска»').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('import validation rejects skills csv with missing headers', async ({ page }) => {
+    await openImportModal(page, 'Навыки');
+
+    const csvContent = 'login,skill,start\nuser1,Навык 1,2024-01-01';
+    await uploadFileThroughChooser(page, {
+      name: 'skills.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Отсутствуют обязательные колонки').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('import validation accepts skills csv with required headers', async ({ page }) => {
+    await openImportModal(page, 'Навыки');
+
+    const csvContent = 'login,skill,start,end,priority\nuser1,Навык 1,2024-01-01,2024-02-01,1';
+    await uploadFileThroughChooser(page, {
+      name: 'skills.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Файл «skills.csv» принят для раздела «Навыки»').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('import validation rejects scheme csv with missing headers', async ({ page }) => {
+    await openImportModal(page, 'Схемы');
+
+    const csvContent = 'login,start,end\nuser1,2024-01-01,2024-02-01';
+    await uploadFileThroughChooser(page, {
+      name: 'schemes.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Отсутствуют обязательные колонки').first()).toBeVisible();
+    await page.getByLabel('Закрыть импорт').click();
+  });
+
+  test('import validation accepts scheme csv with required headers', async ({ page }) => {
+    await openImportModal(page, 'Схемы');
+
+    const csvContent = 'login,id,start,end\nuser1,scheme-1,2024-01-01,2024-02-01';
+    await uploadFileThroughChooser(page, {
+      name: 'schemes.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csvContent, 'utf-8'),
+    });
+
+    await expect(page.locator('text=Файл «schemes.csv» принят для раздела «Схемы»').first()).toBeVisible();
     await page.getByLabel('Закрыть импорт').click();
   });
 });

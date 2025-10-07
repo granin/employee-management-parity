@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Employee, EmployeeStatus, EmployeeTask } from '../types/employee';
 import { createTaskEntry } from '../utils/task';
 import useFocusTrap from '../hooks/useFocusTrap';
@@ -7,7 +7,7 @@ interface EmployeeEditDrawerProps {
   employee: Employee | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (employee: Employee) => void;
+  onSave: (employee: Employee) => void | Promise<void>;
   mode?: 'edit' | 'create';
   isLoading?: boolean;
   onDismiss?: (employee: Employee) => void;
@@ -53,18 +53,28 @@ interface FormState {
   status: EmployeeStatus;
 }
 
-const REQUIRED_FIELDS: Array<{ key: keyof FormState['personalInfo'] | 'credentials.wfmLogin' | 'credentials.externalLogins' | 'orgPlacement.orgUnit' | 'orgPlacement.office' | 'orgPlacement.timeZone' | 'orgPlacement.hourNorm' | 'workInfo.position'; label: string }> = [
-  { key: 'lastName', label: 'Фамилия' },
-  { key: 'firstName', label: 'Имя' },
-  { key: 'middleName', label: 'Отчество' },
-  { key: 'credentials.wfmLogin', label: 'Логин WFM' },
-  { key: 'credentials.externalLogins', label: 'Внешние логины' },
-  { key: 'orgPlacement.orgUnit', label: 'Точка оргструктуры' },
-  { key: 'orgPlacement.office', label: 'Офис' },
-  { key: 'workInfo.position', label: 'Должность' },
-  { key: 'orgPlacement.timeZone', label: 'Часовой пояс' },
-  { key: 'orgPlacement.hourNorm', label: 'Норма часов' }
+interface RequiredFieldConfig {
+  section: keyof FormState;
+  field: string;
+  label: string;
+}
+
+const REQUIRED_FIELDS: RequiredFieldConfig[] = [
+  { section: 'personalInfo', field: 'lastName', label: 'Фамилия' },
+  { section: 'personalInfo', field: 'firstName', label: 'Имя' },
+  { section: 'personalInfo', field: 'email', label: 'Email' },
+  { section: 'personalInfo', field: 'phone', label: 'Телефон' },
+  { section: 'credentials', field: 'wfmLogin', label: 'Логин WFM' },
+  { section: 'credentials', field: 'externalLogins', label: 'Внешние логины' },
+  { section: 'orgPlacement', field: 'orgUnit', label: 'Точка оргструктуры' },
+  { section: 'orgPlacement', field: 'office', label: 'Офис' },
+  { section: 'workInfo', field: 'position', label: 'Должность' },
+  { section: 'orgPlacement', field: 'timeZone', label: 'Часовой пояс' },
+  { section: 'orgPlacement', field: 'hourNorm', label: 'Норма часов' },
 ];
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^(\+?[0-9()\s-]{7,})$/;
 
 const statusOptions: Array<{ value: EmployeeStatus; label: string }> = [
   { value: 'active', label: 'Активен' },
@@ -92,7 +102,44 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
 }) => {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [showCreateIntro, setShowCreateIntro] = useState(mode === 'create');
+
+  const computeValidationErrors = useCallback((state: FormState) => {
+    const validationErrors: Record<string, string> = {};
+
+    REQUIRED_FIELDS.forEach(({ section, field }) => {
+      const sectionValue = (state as Record<string, unknown>)[section] as Record<string, unknown> | undefined;
+      const rawValue = sectionValue ? sectionValue[field] : undefined;
+      const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+
+      if (value === undefined || value === null || value === '') {
+        validationErrors[`${section}.${field}`] = 'Обязательное поле';
+      }
+    });
+
+    const email = state.personalInfo.email.trim();
+    if (!email) {
+      validationErrors['personalInfo.email'] = 'Укажите email';
+    } else if (!EMAIL_PATTERN.test(email)) {
+      validationErrors['personalInfo.email'] = 'Неверный формат email';
+    }
+
+    const phone = state.personalInfo.phone.trim();
+    if (!phone) {
+      validationErrors['personalInfo.phone'] = 'Укажите телефон';
+    } else if (!PHONE_PATTERN.test(phone)) {
+      validationErrors['personalInfo.phone'] = 'Неверный формат телефона';
+    }
+
+    const hourNormValue = Number(state.orgPlacement.hourNorm);
+    if (!Number.isFinite(hourNormValue) || hourNormValue <= 0) {
+      validationErrors['orgPlacement.hourNorm'] = 'Укажите положительное число';
+    }
+
+    return validationErrors;
+  }, []);
 
   const setFieldError = (key: string, message: string) => {
     setErrors((prev) => ({ ...prev, [key]: message }));
@@ -151,6 +198,8 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
         status: employee.status
       });
       setErrors({});
+      setFormError(null);
+      setIsSaving(false);
     }
   }, [employee, isOpen]);
 
@@ -160,6 +209,8 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
     } else {
       setShowCreateIntro(false);
     }
+    setFormError(null);
+    setErrors({});
   }, [mode, isOpen, employee?.id]);
 
   const handleOverlayClick = () => {
@@ -186,6 +237,9 @@ const handleChange = (
     });
     const errorKey = `${section}.${field}`;
     clearFieldError(errorKey);
+    if (formError) {
+      setFormError(null);
+    }
   };
 
   const handleContinueFromIntro = () => {
@@ -200,38 +254,29 @@ const handleChange = (
     setShowCreateIntro(false);
   };
 
-  const validate = (): boolean => {
-    if (!formState) return false;
-
-    const validationErrors: Record<string, string> = {};
-
-    REQUIRED_FIELDS.forEach(item => {
-      const [section, field] = item.key.split('.') as [keyof FormState, string];
-      const value = (formState as any)[section][field];
-      if (!value || (typeof value === 'string' && value.trim() === '')) {
-        validationErrors[item.key] = 'Обязательное поле';
-      }
-    });
-
-    if (formState.personalInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.personalInfo.email)) {
-      validationErrors['personalInfo.email'] = 'Неверный формат email';
+  const validate = useCallback(() => {
+    if (!formState) {
+      return false;
     }
-
-    if (Number.isNaN(Number(formState.orgPlacement.hourNorm)) || Number(formState.orgPlacement.hourNorm) <= 0) {
-      validationErrors['orgPlacement.hourNorm'] = 'Укажите положительное число';
-    }
-
+    const validationErrors = computeValidationErrors(formState);
     setErrors(validationErrors);
     return Object.keys(validationErrors).length === 0;
-  };
+  }, [computeValidationErrors, formState]);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!employee || !formState) return;
-
-    if (!validate()) {
+    if (!employee || !formState || isSaving) {
       return;
     }
+
+    const isValid = validate();
+    if (!isValid) {
+      setFormError('Исправьте ошибки перед сохранением.');
+      return;
+    }
+
+    setFormError(null);
+    setIsSaving(true);
 
     const externalLogins = formState.credentials.externalLogins
       .split(',')
@@ -327,7 +372,15 @@ const handleChange = (
       }
     };
 
-    onSave(updatedEmployee);
+    try {
+      await onSave(updatedEmployee);
+      setErrors({});
+    } catch (error) {
+      console.error('Ошибка при сохранении сотрудника', error);
+      setFormError('Не удалось сохранить изменения. Повторите попытку.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const skillsList = useMemo(() => (employee ? employee.skills.map((skill) => skill.name).join(', ') : ''), [employee]);
@@ -418,6 +471,13 @@ const handleChange = (
       }
     },
   });
+
+  const validationSnapshot = useMemo(
+    () => (formState ? computeValidationErrors(formState) : {}),
+    [computeValidationErrors, formState]
+  );
+
+  const isSubmitDisabled = isLoading || isSaving || !formState || Object.keys(validationSnapshot).length > 0;
 
   const fieldError = (key: string) => errors[key];
 
@@ -807,14 +867,20 @@ const handleChange = (
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Навыки</label>
-                  <div className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50">
+                  <div
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50"
+                    data-testid="drawer-skills-summary"
+                  >
                     {skillsList || 'Навыки не назначены'}
                   </div>
                 </div>
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Резервные навыки</label>
-                  <div className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50">
+                  <div
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50"
+                    data-testid="drawer-reserve-skills-summary"
+                  >
                     {reserveSkillsList || 'Резервные навыки не назначены'}
                   </div>
                 </div>
@@ -897,6 +963,11 @@ const handleChange = (
             </section>
           </div>
 
+          {formError && (
+            <div className="px-6 pb-2 text-sm text-red-600" role="alert">
+              {formError}
+            </div>
+          )}
           <div className="border-t border-gray-200 px-6 py-4 bg-white flex items-center justify-between">
             <button
               type="button"
@@ -907,9 +978,19 @@ const handleChange = (
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              disabled={isSubmitDisabled}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isSubmitDisabled
+                  ? 'bg-blue-300 text-white cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              aria-disabled={isSubmitDisabled}
             >
-              {isCreateMode ? 'Создать сотрудника' : 'Сохранить изменения'}
+              {isSaving
+                ? 'Сохранение…'
+                : isCreateMode
+                  ? 'Создать сотрудника'
+                  : 'Сохранить изменения'}
             </button>
           </div>
         </form>

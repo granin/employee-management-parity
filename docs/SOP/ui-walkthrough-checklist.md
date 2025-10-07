@@ -18,6 +18,7 @@ Use this script to validate the parity demo in a browser session or with Playwri
 - With focus on a row, press `Enter` to open the drawer, and `Space` to toggle selection.
 - Confirm the drawer traps focus, supports `Esc` to close, and returns focus to the triggering row.
 - Inside the drawer use “Уволить” to dismiss an employee, toggle “Показывать уволенных” to confirm they disappear, and use “Восстановить” to revert. Timeline must show system-generated entries for both actions.
+- Clear the email field to confirm the “Сохранить изменения” button disables, restore valid email/phone/hour norm, save to observe the toast, and reopen the drawer after reload to ensure changes persist.
 
 ## 3. Quick Add Flow
 - Open quick add (“Новый сотрудник”), leave login empty and submit → validation messages should appear.
@@ -37,6 +38,7 @@ Use this script to validate the parity demo in a browser session or with Playwri
   - Comment field adds timeline entries (check in drawer afterward).
 - Submit and validate: success toast, rows updated, tasks timeline shows comment with bulk-edit source.
 - Retry with no actions/comment: error message should block submission.
+- Review the “Выбранные сотрудники” panel (count matches selection) and the “Предстоящие изменения” summary before applying changes.
 
 ## 6. Tag Manager (`image69fb8e9b.png`)
 - Open “Теги” with no selection: catalogue is still editable; creating a tag requires unique name and displays chosen colour.
@@ -44,15 +46,21 @@ Use this script to validate the parity demo in a browser session or with Playwri
 - Switch to “Удалить у всех” and remove an existing tag from the selection; catalogue edits remain available without any selection.
 - Delete a tag definition and ensure it is removed from all employees instantly.
 - Confirm `Esc` closes the modal and focus is trapped while open.
+- Close the modal, reopen (or reload then reopen) to ensure newly created catalogue entries persist outside the current selection.
 
 ## 7. Import / Export (`image13.png`)
-- Open импорт → verify instructions reference Appendix templates.
-- Upload a CSV with missing required headers (e.g. `login,ФИО` only) and confirm the modal surfaces the “Отсутствуют обязательные колонки” error while retaining focus.
-- Upload a valid CSV for “Теги” containing `login,ФИО,Тег` and confirm the success notice references Appendix 6.
+- Open импорт → verify instructions reference Appendix templates (1/3/4/8).
+- Upload negative cases for each context:
+  - “Сотрудника”: header missing (e.g. omit `hiringDate`).
+  - “Навыки”: header missing (omit `priority`).
+  - “Схемы”: header missing (omit `id`).
+  - “Теги”/“Отпуска”: reuse regression CSV (`login,ФИО` etc.).
+- Upload valid CSVs for the same contexts and confirm success messages reference the correct appendix; ensure focus stays within the modal while processing.
 - Upload a dummy file with the wrong extension and confirm rejection guidance includes supported formats.
 - Open экспорт → confirm options include CSV (active), Отпуска, Теги. CSV учитывает включённые колонки; Отпуска выводит сотрудников со статусом «В отпуске», Теги формирует перечень логинов/тегов.
-- Close both modals via `Esc` and ensure focus returns to the toolbar.
-- Download “Теги” CSV and spot-check that login/ФИО/тег строки присутствуют. Upload файл с неподдерживаемым расширением (например `tags.txt`) и убедитесь, что появляется сообщение об ошибке с подсказкой по формату.
+- Close both модals via `Esc` and ensure focus returns to the toolbar.
+- Download “Теги” CSV and spot-check that login/ФИО/тег строки присутствуют.
+- Verify the modal heading/description match the selected context and that the downloaded filename uses the expected prefix (`employees_export`, `employees_vacations`, `employees_tags`).
 
 ## 8. Column Settings
 - Open “Колонки”, toggle a few entries, confirm table updates; restore defaults.
@@ -60,7 +68,9 @@ Use this script to validate the parity demo in a browser session or with Playwri
 
 ## 9. Quick Accessibility Sweep
 - Cycle through all toolbar controls, modals, and drawers: focus outlines must be visible and `Esc` should close each overlay.
-- Verify the ARIA live region announces the number of selected employees when toggling checkboxes.
+- Check that bulk edit, tag manager, column settings, and import/export announce titles/descriptions via assistive tech (VoiceOver rotor → headings/landmarks).
+- Verify the ARIA live region announces selection counts, dismiss/restore notices, and import/export success/error states.
+- Schedule the NVDA sweep (Windows) alongside the existing VoiceOver lap and log differences in `docs/SESSION_HANDOFF.md` + Phase 5 PRD.
 
 ## 10. Demo Tabs (Regression)
 - Each secondary tab remains a placeholder but now shares the same label style as production modules; no “демо” badges should appear.

@@ -55,6 +55,8 @@
 ### Completed Worklog
 - **2025-10-06** – Phase 1 baseline (bulk edit + tag parity) landed: mock dataset expanded, quick add reduced to login/password, toolbar converted to icon buttons, edit drawer enriched with required/optional sections, initial bulk-edit flow stitched in (status/team/comment).
 - **2025-10-07** – Phase 2/3 follow-up: selection mode overhaul, scheme-history readout, dismiss/restore parity, tag catalogue with four-tag cap, import validation (extensions + headers), expanded Playwright coverage (selection, tag limit, imports), nav labels aligned with production (no “демо”).
+- **2025-10-07** – Phase 4 polish: overlays wired with `aria-labelledby`/`aria-describedby`, VoiceOver sweep logged, bulk-edit add/remove skills/reserve captured in Playwright, and Appendix 1/3/4/8 import validation plus documentation refresh delivered.
+- **2025-10-07** – Phase 5 stabilization (partial): employee edits now persist via localStorage with success toast/error handling, edit drawer validations gate save (email/phone/hour norm), tag catalogue persists across refresh, import/export modals render context-specific headings & file prefixes, bulk-edit drawer shows scrollable selection count + change summary, and Playwright covers the new flows. NVDA sweep remains pending hardware access.
 
 See `docs/SESSION_SUMMARY.md` for a chronological narrative and `docs/Archive/` for historical context (pre-Oct 07 builds).
 Historical backlog details have been preserved in `docs/Archive/EMPLOYEE_MANAGEMENT_PARITY_PLAN_2025-10-06.md`.
@@ -62,10 +64,10 @@ Historical backlog details have been preserved in `docs/Archive/EMPLOYEE_MANAGEM
 ## 5. Open Gaps & Next Steps (toward 95 % parity)
 | Area | Reality target | Current state | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| Accessibility | Full keyboard + screen-reader support (Esc closes overlays, focus trapped, aria-live announcements) | Keyboard happy paths only; screen-reader sweep pending | Next Agent | `docs/Tasks/phase-4-accessibility-and-final-parity.md` |
-| Bulk edit coverage | Add/remove/replace for skills, reserve skills, tags; timeline comment evidence | Replace covered; add/remove Playwright cases outstanding | Next Agent | Same as above |
-| Import/export templates | Appendix 1/3/4/8 coverage, success/error messaging | Теги/Отпуска validated; employees/skills/schemes to double-check | Next Agent | Phase 4 doc |
-| Persistence note | Real system saves edits; demo remains front-end only | Document non-persistent nature & flag for backend | Next Agent | Update parity backlog / handoff |
+| NVDA sweep | Cross-platform screen-reader audit (VoiceOver + NVDA) | VoiceOver logged; NVDA run pending hardware access | Next Agent | `docs/SESSION_HANDOFF.md`, Phase 4 doc |
+| Evidence refresh | Screenshot updates + archive hygiene | Selection banner / dismiss timeline / tag-limit alert screenshots outstanding; need to archive pre-Oct 07 reports with forward links | Next Agent | `docs/SCREENSHOT_INDEX.md`, `docs/Archive/` |
+
+> Note: Front-end persistence now mirrors WFM behaviour (Phase 5); backend integration remains future scope once APIs are available.
 
 See `docs/Tasks/phase-4-accessibility-and-final-parity.md` for the detailed task list, line ranges, and evidence links. The comprehensive audit (`~/Desktop/2025-10-07_09-00_comprehensive-validation-report.markdown`) remains the canonical gap report.
   - `/Users/m/Documents/replica/orchestrator/argus/imports/code/CE_MAGIC_PROMPTS/PLAN-USING-MAGIC-PROMPT.md`
@@ -74,7 +76,6 @@ See `docs/Tasks/phase-4-accessibility-and-final-parity.md` for the detailed task
 - Incorporate any mandatory steps/macros/logging formats from these docs into agent task templates.
 
 ## 12. Next Immediate Steps
-1. Confirm screenshot interpretations in Section 2 against parity report.
-2. Clean proxy settings and confirm npm toolchain works.
-3. Begin Phase 2: define shared form models and mock data.
-4. Draft agent task templates using MAGIC PROMPTS/HUMAN_LAYER guidance.
+1. Capture the remaining screenshots (selection banner, dismiss/restores timeline, tag-limit alert) and register aliases in `docs/SCREENSHOT_INDEX.md`.
+2. Schedule the NVDA accessibility sweep to mirror the logged VoiceOver results; append notes to `docs/SESSION_HANDOFF.md`.
+3. Align with product on the next parity module (Schedule/Reporting) and spin up the Phase 5 PRD skeleton once scope is confirmed.

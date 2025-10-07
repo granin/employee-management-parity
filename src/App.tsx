@@ -9,6 +9,46 @@ import { Employee, EmployeeTask, TaskSource, Team } from './types/employee';
 import { createTaskEntry } from './utils/task';
 import './index.css';
 
+const EMPLOYEE_STORAGE_KEY = 'employee-management-parity:employees';
+
+const isIsoDateString = (value: unknown): value is string =>
+  typeof value === 'string' && /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/.test(value);
+
+const deserializeEmployees = (raw: string): Employee[] | null => {
+  try {
+    return JSON.parse(raw, (_key, value) => {
+      if (isIsoDateString(value)) {
+        return new Date(value);
+      }
+      return value;
+    });
+  } catch (error) {
+    console.error('Не удалось прочитать сохранённые данные сотрудников', error);
+    return null;
+  }
+};
+
+const serializeEmployees = (employees: Employee[]): string =>
+  JSON.stringify(employees, (_key, value) => (value instanceof Date ? value.toISOString() : value));
+
+const loadInitialEmployees = (): Employee[] => {
+  if (typeof window === 'undefined') {
+    return INITIAL_EMPLOYEES;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(EMPLOYEE_STORAGE_KEY);
+    if (!stored) {
+      return INITIAL_EMPLOYEES;
+    }
+    const parsed = deserializeEmployees(stored);
+    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as Employee[]) : INITIAL_EMPLOYEES;
+  } catch (error) {
+    console.error('Ошибка при получении сотрудников из localStorage', error);
+    return INITIAL_EMPLOYEES;
+  }
+};
+
 const createSeedTasks = (
   messages: string[],
   startDateIso: string,
@@ -1273,7 +1313,7 @@ const INITIAL_EMPLOYEES: Employee[] = [
 ];
 
 const App: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>(() => loadInitialEmployees());
   const [currentView, setCurrentView] = useState<string>('list');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [focusEmployeeId, setFocusEmployeeId] = useState<string | null>(null);
@@ -1332,6 +1372,20 @@ const App: React.FC = () => {
     setFocusEmployeeId(newEmployee.id);
     setCurrentView('list');
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    try {
+      window.localStorage.setItem(EMPLOYEE_STORAGE_KEY, serializeEmployees(employees));
+    } catch (error) {
+      console.error('Не удалось сохранить сотрудников в localStorage', error);
+    }
+
+    return undefined;
+  }, [employees]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

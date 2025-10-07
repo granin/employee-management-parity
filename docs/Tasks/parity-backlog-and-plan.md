@@ -34,8 +34,8 @@ Manual references: CH3 Employees, CH5 Schedule (Advanced, Shifts, Build), screen
    - Implement matrix sections for work scheme history entries, primary/reserve skills, tags, hours norm with add/replace/remove semantics matching manual.
    - Persist bulk-edit comments into task timeline with source badges.
    - Extend Playwright to cover add/remove for tags, skills, reserve skills, scheme remove.
-   - **Files:** `src/components/EmployeeListContainer.tsx:940-1360`, `src/components/EmployeeEditDrawer.tsx:330-520`, `tests/employee-list.spec.ts:67-170`.
-   - ✅ (07 Oct 2025) Tag matrix enforces ≤4 per employee with blocking error state; Playwright scenario added (tags + skills/reserve replace).
+   - **Files:** `src/components/EmployeeListContainer.tsx:940-1380`, `src/components/EmployeeEditDrawer.tsx:320-520`, `tests/employee-list.spec.ts:169-240`.
+   - ✅ (07 Oct 2025) Tag matrix enforcing ≤4 тегов, Playwright сценарии закрывают add/remove/replace для skills/reserve, таймлайн фиксирует массовые комментарии.
 
 7. **Tag manager as global catalogue**
    - Allow managing the tag library without a selection (create, edit colour, delete) while keeping apply actions disabled until rows selected.
@@ -46,14 +46,13 @@ Manual references: CH3 Employees, CH5 Schedule (Advanced, Shifts, Build), screen
 8. **Import / Export categories**
    - CSV/Отпуска/Теги экспортируют данные из отфильтрованного/выбранного списка (шаблоны Appendix 6/8). Доработать, когда появятся реальные отпускные периоды.
    - Расширить валидацию: помимо расширений проверить обязательные колонки и пустые файлы; добавить позитивный сценарий (валидный CSV) в автотесты.
-   - **Files:** `src/components/EmployeeListContainer.tsx:1080-1290`, `tests/employee-list.spec.ts:101-138`.
-   - ✅ (07 Oct 2025) Extension + empty-file checks, required-header validation for “Теги” и “Отпуска”, и Playwright coverage (invalid/valid paths).
+   - **Files:** `src/components/EmployeeListContainer.tsx:1400-1680`, `tests/employee-list.spec.ts:291-452`.
+   - ✅ (07 Oct 2025) Extension + пустой файл + full header check для “Сотрудника” (Appendix 1), “Навыки” (Appendix 3), “Смены предпочтений” (Appendix 4), “Схемы” (Appendix 8), “Теги”, “Отпуска”; Playwright покрывает позитив/негатив.
 
 9. **Accessibility & ARIA**
    - Готово: фокусы/`Esc` для фильтров и всех модальных поверхностей, live-region для выборов/увольнений/экспортов.
-   - Осталось: пройти screen reader (NVDA/VoiceOver) и задокументировать порядок чтения.
-   - **Files:** `src/components/EmployeeListContainer.tsx:200-480`, `src/components/EmployeeEditDrawer.tsx:40-120`, `src/components/QuickAddEmployee.tsx:40-220`, `docs/SESSION_HANDOFF.md` (record findings).
-   - ➡️ Tracked in detail under Phase 4 doc (`docs/Tasks/phase-4-accessibility-and-final-parity.md`).
+   - ✅ (07 Oct 2025) VoiceOver проход: модальные окна получают `aria-labelledby`/`aria-describedby`, импорт/экспорт и теговый менеджер отдают статусы через `role="status"`/`role="alert"`; лог записан в `docs/SESSION_HANDOFF.md` и Phase 4 doc.
+   - **Files:** `src/components/EmployeeListContainer.tsx:200-360`, `src/components/EmployeeEditDrawer.tsx:40-360`, `src/components/QuickAddEmployee.tsx:40-220`, `docs/SESSION_HANDOFF.md`.
 
 10. **Edge-case regression tests**
     - Добавлены сценарии на увольнение/восстановление, экспорт тегов и ошибку загрузки. Следующее: лимит тегов, ошибки bulk edit, пустые состояния, проверка localStorage.
@@ -67,6 +66,24 @@ Manual references: CH3 Employees, CH5 Schedule (Advanced, Shifts, Build), screen
 12. **Session SOP enforcement**
    - Ensure README/AGENTS highlight new doc paths (docs/SOP, docs/System, docs/Tasks).
    - Add reminders to clean `test-results/` and run smoke steps after each slice.
+
+## Future Backlog (Post-Phase 4)
+13. **NVDA accessibility sweep**
+    - **Severity:** B (compliance follow-up)
+    - **Files:** `docs/SESSION_HANDOFF.md`, `docs/SOP/ui-walkthrough-checklist.md` (log findings), `src/components/*` if fixes required.
+    - **Notes:** VoiceOver pass is complete on macOS; schedule NVDA on Windows hardware to confirm parity and update docs with results.
+
+14. **Phase 5 – Stabilization & Validation**
+    - Tracker: `docs/Tasks/phase-5-stabilization-and-validation-prd.md`.
+    - ✅ (07 Oct 2025) Edit persistence with toast/error handling, validation gating (email/phone/hour norm), tag catalogue persistence, context-aware import/export headings + file prefixes, bulk-edit summary/count, Playwright coverage updated.
+    - ⏳ NVDA sweep (Windows hardware) and screenshot backfill remain; log results in handoff/PRD once executed.
+    - Pull references from `~/Desktop/ff.markdown`, parity report, and the updated walkthrough.
+
+15. **Phase 6 – Migration Planning**
+    - Tracker: `docs/Tasks/phase-6-migration-planning-prd.md`.
+    - Focus areas: formalise wrapper APIs (Radix dialog/popover, TanStack table, RHF+Zod forms), stage-by-stage migration roadmap, validation/rollback guardrails.
+    - Prep references: `migration-prep/README.md`, `MANIFEST.md`, wrapper prototypes under `migration-prep/wrappers-draft/`, playground demos, `migration-prep/ACCESSIBILITY_CHECKLIST.md`.
+    - Kick off once Phase 5 ships; migration plan should lock validation cadence (Playwright + NVDA) and document bundle/performance checkpoints.
 
 ## Completed (06 Oct 2025)
 - Seeded realistic employee dataset with extended fields.
