@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Employee, EmployeeStatus } from '../types/employee';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Employee, EmployeeStatus, EmployeeTask } from '../types/employee';
+import { createTaskEntry } from '../utils/task';
+import useFocusTrap from '../hooks/useFocusTrap';
 
 interface EmployeeEditDrawerProps {
   employee: Employee | null;
@@ -8,6 +10,8 @@ interface EmployeeEditDrawerProps {
   onSave: (employee: Employee) => void;
   mode?: 'edit' | 'create';
   isLoading?: boolean;
+  onDismiss?: (employee: Employee) => void;
+  onRestore?: (employee: Employee) => void;
 }
 
 interface FormState {
@@ -34,7 +38,6 @@ interface FormState {
   };
   workInfo: {
     position: string;
-    manager: string;
     hireDate: string;
   };
   preferences: {
@@ -71,6 +74,12 @@ const statusOptions: Array<{ value: EmployeeStatus; label: string }> = [
   { value: 'terminated', label: 'Уволен' }
 ];
 
+const TASK_SOURCE_LABELS: Record<EmployeeTask['source'], string> = {
+  manual: 'Вручную',
+  'bulk-edit': 'Массовое редактирование',
+  system: 'Система',
+};
+
 const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
   employee,
   isOpen,
@@ -78,6 +87,8 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
   onSave,
   mode = 'edit',
   isLoading = false,
+  onDismiss,
+  onRestore,
 }) => {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -125,7 +136,6 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
         },
         workInfo: {
           position: employee.workInfo.position,
-          manager: typeof employee.workInfo.manager === 'string' ? employee.workInfo.manager : employee.workInfo.manager.fullName,
           hireDate: employee.workInfo.hireDate.toISOString().slice(0, 10)
         },
         preferences: {
@@ -135,7 +145,7 @@ const EmployeeEditDrawer: React.FC<EmployeeEditDrawerProps> = ({
         additional: {
           personnelNumber: employee.personnelNumber ?? '',
           actualAddress: employee.actualAddress ?? employee.personalInfo.address ?? '',
-          tasks: (employee.tasks ?? []).join('\n'),
+          tasks: '',
         },
         tags: employee.tags.join(', '),
         status: employee.status
@@ -238,13 +248,22 @@ const handleChange = (
       .map((scheme) => scheme.trim())
       .filter(Boolean);
 
-    const tasks = formState.additional.tasks
+    const newTaskMessages = formState.additional.tasks
       .split(/\r?\n/)
       .map((task) => task.trim())
       .filter(Boolean);
 
     const actualAddress = formState.additional.actualAddress.trim();
     const personnelNumber = formState.additional.personnelNumber.trim();
+
+    const existingTasks = employee.tasks ?? [];
+    const combinedTasks =
+      newTaskMessages.length > 0
+        ? [
+            ...existingTasks,
+            ...newTaskMessages.map((message) => createTaskEntry(message, 'manual')),
+          ]
+        : existingTasks;
 
     const updatedEmployee: Employee = {
       ...employee,
@@ -285,7 +304,6 @@ const handleChange = (
       workInfo: {
         ...employee.workInfo,
         position: formState.workInfo.position.trim(),
-        manager: formState.workInfo.manager.trim() || employee.workInfo.manager,
         hireDate: formState.workInfo.hireDate
           ? new Date(formState.workInfo.hireDate)
           : employee.workInfo.hireDate
@@ -297,7 +315,7 @@ const handleChange = (
       },
       personnelNumber: personnelNumber || undefined,
       actualAddress: actualAddress || undefined,
-      tasks: tasks.length > 0 ? tasks : employee.tasks,
+      tasks: combinedTasks,
       tags: formState.tags
         .split(',')
         .map(tag => tag.trim())
@@ -327,6 +345,80 @@ const handleChange = (
       .filter(Boolean);
   }, [formState?.tags]);
 
+  const taskTimeline = useMemo(() => {
+    if (!employee?.tasks) {
+      return [] as Array<{
+        id: string;
+        message: string;
+        createdAt: Date;
+        createdBy: string;
+        source: EmployeeTask['source'];
+      }>;
+    }
+
+    return employee.tasks
+      .map((task) => ({
+        ...task,
+        createdAt: task.createdAt instanceof Date ? task.createdAt : new Date(task.createdAt),
+      }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [employee]);
+
+  const schemeHistory = useMemo(() => {
+    if (!employee) {
+      return [] as Array<{
+        id: string;
+        name: string;
+        effectiveFrom: Date | null;
+        effectiveTo: Date | null;
+        isCurrent: boolean;
+      }>;
+    }
+
+    const normalizeDate = (value: Date | string | undefined) => {
+      if (!value) {
+        return null;
+      }
+      return value instanceof Date ? value : new Date(value);
+    };
+
+    const history = (employee.orgPlacement.workSchemeHistory ?? []).map((item) => ({
+      id: item.id ?? `history-${item.name}`,
+      name: item.name,
+      effectiveFrom: normalizeDate(item.effectiveFrom),
+      effectiveTo: normalizeDate(item.effectiveTo),
+      isCurrent: false,
+    }));
+
+    const current = employee.orgPlacement.workScheme
+      ? [{
+          id: employee.orgPlacement.workScheme.id ?? 'current-scheme',
+          name: employee.orgPlacement.workScheme.name,
+          effectiveFrom: normalizeDate(employee.orgPlacement.workScheme.effectiveFrom),
+          effectiveTo: null,
+          isCurrent: true,
+        }]
+      : [];
+
+    const combined = [...current, ...history];
+    return combined.sort((a, b) => {
+      const timeA = a.effectiveFrom ? a.effectiveFrom.getTime() : 0;
+      const timeB = b.effectiveFrom ? b.effectiveFrom.getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [employee]);
+
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(drawerRef, {
+    enabled: isOpen,
+    onEscape: () => {
+      if (!isLoading) {
+        onClose();
+      }
+    },
+  });
+
   const fieldError = (key: string) => errors[key];
 
   if (!isOpen || !employee || !formState) {
@@ -343,6 +435,11 @@ const handleChange = (
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex" onClick={handleOverlayClick}>
       <div
+        ref={drawerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="employee-drawer-heading"
         className="relative ml-auto h-full w-full max-w-2xl bg-white shadow-xl flex flex-col"
         onClick={handleContentClick}
       >
@@ -351,17 +448,48 @@ const handleChange = (
             <p className="text-xs uppercase text-gray-500">
               {isCreateMode ? 'Создание нового сотрудника' : 'Редактирование данных сотрудника'}
             </p>
-            <h2 className="text-lg font-semibold text-gray-900">{headerName}</h2>
+            <h2 id="employee-drawer-heading" className="text-lg font-semibold text-gray-900">{headerName}</h2>
             <p className="text-sm text-gray-500">Логин WFM: {headerLogin}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-            aria-label="Закрыть"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {!isCreateMode && employee.status !== 'terminated' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isLoading && employee) {
+                    onDismiss?.(employee);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60"
+                disabled={isLoading}
+              >
+                Уволить
+              </button>
+            )}
+            {!isCreateMode && employee.status === 'terminated' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isLoading && employee) {
+                    onRestore?.(employee);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-60"
+                disabled={isLoading}
+              >
+                Восстановить
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Закрыть"
+              data-testid="drawer-close-button"
+            >
+              ✕
+            </button>
+          </div>
         </div>
         {showCreateIntro ? (
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
@@ -598,16 +726,6 @@ const handleChange = (
                 </div>
 
                 <div>
-                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Менеджер</label>
-                  <input
-                    type="text"
-                    value={formState.workInfo.manager}
-                    onChange={event => handleChange('workInfo', 'manager', event.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Дата найма</label>
                   <input
                     type="date"
@@ -627,6 +745,41 @@ const handleChange = (
                     placeholder="Административный график"
                   />
                 </div>
+
+                {schemeHistory.length > 0 && (
+                  <div className="sm:col-span-2 space-y-2">
+                    <span className="block text-xs uppercase font-medium text-gray-500">История схем работы</span>
+                    <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3" role="list">
+                      {schemeHistory.map((entry) => {
+                        const fromLabel = entry.effectiveFrom
+                          ? entry.effectiveFrom.toLocaleDateString('ru-RU')
+                          : '—';
+                        const toLabel = entry.isCurrent
+                          ? 'по наст. время'
+                          : entry.effectiveTo
+                            ? entry.effectiveTo.toLocaleDateString('ru-RU')
+                            : '—';
+                        return (
+                          <div
+                            key={`scheme-history-${entry.id}`}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-700 shadow-sm"
+                            role="listitem"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">{entry.name}</span>
+                              {entry.isCurrent && (
+                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                  Текущая
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500">{fromLabel} — {toLabel}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="sm:col-span-2 space-y-2">
                   <label className="block text-xs uppercase font-medium text-gray-500">Теги</label>
@@ -711,15 +864,34 @@ const handleChange = (
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs uppercase font-medium text-gray-500 mb-1">Активные задачи</label>
-                  <textarea
-                    value={formState.additional.tasks}
-                    onChange={(event) => handleChange('additional', 'tasks', event.target.value)}
-                    className="w-full min-h-[92px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Каждая задача с новой строки"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">Каждая строка превратится в отдельную запись в списке задач.</p>
+                <div className="sm:col-span-2 space-y-3">
+                  <label className="block text-xs uppercase font-medium text-gray-500">Активные задачи</label>
+                  <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {taskTimeline.length === 0 ? (
+                      <p className="p-3 text-sm text-gray-500">Задачи ещё не добавлены.</p>
+                    ) : (
+                      taskTimeline.map((task) => (
+                        <div key={task.id} className="px-3 py-2 text-sm text-gray-700 flex flex-col gap-1">
+                          <span>{task.message}</span>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <span>{task.createdAt.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                              ⚙️ {TASK_SOURCE_LABELS[task.source] ?? task.source}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div>
+                    <textarea
+                      value={formState.additional.tasks}
+                      onChange={(event) => handleChange('additional', 'tasks', event.target.value)}
+                      className="w-full min-h-[92px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Добавьте новые задачи: одна строка — одна запись"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Новые строки будут добавлены к таймлайну вместе с отметкой времени.</p>
+                  </div>
                 </div>
               </div>
             </section>

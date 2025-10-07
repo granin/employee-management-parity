@@ -16,5 +16,8 @@ Reference captures live outside the repo under `~/Desktop/shots epml mamgnt/`. U
 | `d1cf682d-ab3d-4417-8223-195716783ad8.png` | Employee module loading overlay copy. |
 | `d4d86894-87ba-454c-8678-f76c46829fd7.png` | Full list baseline (row height, alternating background). |
 | `fafa2f56-7047-4055-8b50-f2475f2af74d.png` | Drawer detail close-up (tags pill style and placeholders). |
+| `TBD_selection-mode-banner.png` | (Capture pending) Selection mode info banner + toolbar state (after multi-select). Reference: 2025-10-07 validation report. |
+| `TBD_dismiss-restore-timeline.png` | (Capture pending) Timeline entries showing dismiss/restore system badges. Reference: 2025-10-07 validation report. |
+| `TBD_tag-manager-alert.png` | (Capture pending) Tag manager alert when exceeding four-tag limit. Reference: 2025-10-07 validation report. |
 
 Add additional mappings here as screenshots evolve so future agents can jump directly to the right evidence set.

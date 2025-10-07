@@ -31,6 +31,8 @@ npm install
 npm run build
 npm run preview -- --host 127.0.0.1 --port 4174
 ```
+> Only run preview when the repo owner explicitly requests it; stop the server once checks finish.
+
 Open the printed URL and ensure:
 - Employee list loads; row click toggles selection and the toolbar icons enable/disable correctly.
 - Opening the edit drawer via the employee name button works and reflects the selected record.
@@ -43,9 +45,15 @@ Open the printed URL and ensure:
 - `docs/SCREENSHOT_INDEX.md` – alias ↔ screenshot mapping.
 - `docs/AGENT_PARITY_REPORT.md` – browser-agent comparison report.
 - `docs/Tasks/parity-backlog-and-plan.md` – detailed next actions per parity phase.
+- `docs/Tasks/phase-3-crud-and-data-parity-prd.md` – current Phase 3 scope (CRUD/bulk edit/import-export).
+- `docs/Tasks/phase-4-accessibility-and-final-parity.md` – a11y sweep & final parity polish (current focus).
 - `docs/SOP/standard-operating-procedures.md` – workflow checklist (UI, tests, deploys).
 - `docs/SOP/ui-walkthrough-checklist.md` – step-by-step validation script.
+- `docs/SOP/session-prep-and-handoff.md` – pre-handoff checklist.
 - `docs/System/employee-management-overview.md` – module/data summary.
+- `docs/System/parity-roadmap.md` – upcoming module staging notes.
+- `docs/ENVIRONMENT_FIX_TODO.md` – shell/Node/preview guidance.
+- `docs/System/ui-guidelines.md` – copy conventions (no “демо” labels, no tech names in UI).
 
 ---
 ## Agent Login (Real System)

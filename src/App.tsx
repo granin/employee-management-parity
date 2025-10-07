@@ -1,12 +1,27 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmployeeListContainer from './components/EmployeeListContainer';
 import EmployeePhotoGallery from './components/EmployeePhotoGallery';
 import PerformanceMetricsView from './components/PerformanceMetricsView';
 import QuickAddEmployee from './components/QuickAddEmployee';
 import EmployeeStatusManager from './components/EmployeeStatusManager';
 import CertificationTracker from './components/CertificationTracker';
-import { Employee, Team } from './types/employee';
+import { Employee, EmployeeTask, TaskSource, Team } from './types/employee';
+import { createTaskEntry } from './utils/task';
 import './index.css';
+
+const createSeedTasks = (
+  messages: string[],
+  startDateIso: string,
+  source: TaskSource = 'system'
+): EmployeeTask[] => {
+  const start = new Date(startDateIso);
+  return messages.map((message, index) =>
+    createTaskEntry(message, source, {
+      createdAt: new Date(start.getTime() + index * 10 * 60 * 1000),
+      createdBy: 'system',
+    })
+  );
+};
 
 const TEAM_PRESETS: Record<string, Team> = {
   support: {
@@ -110,6 +125,20 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Административный график',
         effectiveFrom: new Date('2022-03-15'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-support-flex-2021',
+          name: 'Гибкий график',
+          effectiveFrom: new Date('2021-06-01'),
+          effectiveTo: new Date('2022-03-14'),
+        },
+        {
+          id: 'scheme-support-night-2020',
+          name: 'Ночной график',
+          effectiveFrom: new Date('2020-01-01'),
+          effectiveTo: new Date('2021-05-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -184,7 +213,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-001',
       actualAddress: 'г. Бишкек, проспект Манаса 12',
-      tasks: ['Контроль качества', 'Наставничество новичков'],
+      tasks: createSeedTasks(
+        ['Контроль качества', 'Наставничество новичков'],
+        '2024-01-12T09:00:00Z'
+      ),
     },
   {
     id: 'emp_002',
@@ -229,6 +261,20 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Гибкий график',
         effectiveFrom: new Date('2021-01-05'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-quality-standard-2020',
+          name: 'Стандартный график 5/2',
+          effectiveFrom: new Date('2020-02-01'),
+          effectiveTo: new Date('2021-01-04'),
+        },
+        {
+          id: 'scheme-quality-remote-2019',
+          name: 'Удалённый график',
+          effectiveFrom: new Date('2019-07-01'),
+          effectiveTo: new Date('2020-01-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -289,7 +335,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-002',
       actualAddress: 'г. Бишкек, ул. Киевская 88',
-      tasks: ['Аудит звонков', 'Подготовка аналитических отчётов'],
+      tasks: createSeedTasks(
+        ['Аудит звонков', 'Подготовка аналитических отчётов'],
+        '2024-02-03T10:15:00Z'
+      ),
     },
   {
     id: 'emp_003',
@@ -328,6 +377,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Смешанный график',
         effectiveFrom: new Date('2024-08-01'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-support-onboarding-2024',
+          name: 'Наставничество + обучение',
+          effectiveFrom: new Date('2024-07-01'),
+          effectiveTo: new Date('2024-07-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -387,7 +444,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
     },
     personnelNumber: 'PN-003',
     actualAddress: 'г. Бишкек, ул. Фрунзе 45',
-    tasks: ['Обработка чатов', 'Обучение продуктовой базе'],
+    tasks: createSeedTasks(
+      ['Обработка чатов', 'Обучение продуктовой базе'],
+      '2024-02-18T08:30:00Z'
+    ),
   },
   {
     id: 'emp_004',
@@ -428,6 +488,20 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Плавающий график',
         effectiveFrom: new Date('2020-01-01'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-sales-classic-2019',
+          name: 'Административный график',
+          effectiveFrom: new Date('2019-02-01'),
+          effectiveTo: new Date('2019-12-31'),
+        },
+        {
+          id: 'scheme-sales-intern-2018',
+          name: 'Стажёрский график',
+          effectiveFrom: new Date('2018-02-10'),
+          effectiveTo: new Date('2019-01-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -488,7 +562,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-004',
       actualAddress: 'г. Бишкек, ул. Советская 3',
-      tasks: ['Поддержка ключевых клиентов', 'Подготовка коммерческих предложений'],
+      tasks: createSeedTasks(
+        ['Поддержка ключевых клиентов', 'Подготовка коммерческих предложений'],
+        '2024-01-28T11:00:00Z'
+      ),
     },
   {
     id: 'emp_005',
@@ -528,6 +605,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Сменный график 2/2',
         effectiveFrom: new Date('2021-02-01'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-operations-admin-2020',
+          name: 'Административный график',
+          effectiveFrom: new Date('2020-01-01'),
+          effectiveTo: new Date('2021-01-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -599,7 +684,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-005',
       actualAddress: 'г. Бишкек, мкр. Джал 24-17',
-      tasks: ['Составление сменных графиков', 'Реагирование на инциденты'],
+      tasks: createSeedTasks(
+        ['Составление сменных графиков', 'Реагирование на инциденты'],
+        '2024-02-09T07:45:00Z'
+      ),
     },
   {
     id: 'emp_006',
@@ -639,6 +727,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Гибридный график',
         effectiveFrom: new Date('2022-01-10'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-hr-admin-2020',
+          name: 'Административный график',
+          effectiveFrom: new Date('2020-01-01'),
+          effectiveTo: new Date('2022-01-09'),
+        },
+      ],
     },
     skills: [
       {
@@ -699,7 +795,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-006',
       actualAddress: 'г. Бишкек, ул. Панфилова 10',
-      tasks: ['Подбор персонала', 'Организация адаптации'],
+      tasks: createSeedTasks(
+        ['Подбор персонала', 'Организация адаптации'],
+        '2024-01-22T09:20:00Z'
+      ),
     },
   {
     id: 'emp_007',
@@ -739,6 +838,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Административный график',
         effectiveFrom: new Date('2021-09-15'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-sales-training-2021',
+          name: 'Обучение + полевые встречи',
+          effectiveFrom: new Date('2021-06-01'),
+          effectiveTo: new Date('2021-09-14'),
+        },
+      ],
     },
     skills: [
       {
@@ -810,7 +917,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-007',
       actualAddress: 'г. Алматы, ул. Абая 115',
-      tasks: ['Ведение VIP-клиентов', 'Кросс-продажи'],
+      tasks: createSeedTasks(
+        ['Ведение VIP-клиентов', 'Кросс-продажи'],
+        '2024-02-12T13:10:00Z'
+      ),
     },
   {
     id: 'emp_008',
@@ -850,6 +960,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Гибридный график',
         effectiveFrom: new Date('2022-09-01'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-training-admin-2021',
+          name: 'Административный график',
+          effectiveFrom: new Date('2021-03-01'),
+          effectiveTo: new Date('2022-08-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -910,7 +1028,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-008',
       actualAddress: 'г. Бишкек, ул. Московская 123',
-      tasks: ['Подготовка тренингов', 'Наставничество стажёров'],
+      tasks: createSeedTasks(
+        ['Подготовка тренингов', 'Наставничество стажёров'],
+        '2024-01-16T14:05:00Z'
+      ),
     },
   {
     id: 'emp_009',
@@ -949,6 +1070,14 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Административный график',
         effectiveFrom: new Date('2024-05-06'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-quality-onboarding-2024',
+          name: 'Онбординг + наставничество',
+          effectiveFrom: new Date('2024-04-01'),
+          effectiveTo: new Date('2024-05-05'),
+        },
+      ],
     },
     skills: [
       {
@@ -1008,7 +1137,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
     },
     personnelNumber: 'PN-009',
     actualAddress: 'г. Бишкек, ул. Курманжан Датка 18',
-    tasks: ['Анализ данных Power BI', 'Оптимизация отчётности'],
+    tasks: createSeedTasks(
+      ['Анализ данных Power BI', 'Оптимизация отчётности'],
+      '2024-02-25T15:40:00Z'
+    ),
   },
   {
     id: 'emp_010',
@@ -1048,6 +1180,20 @@ const INITIAL_EMPLOYEES: Employee[] = [
         name: 'Стандартный график',
         effectiveFrom: new Date('2016-07-12'),
       },
+      workSchemeHistory: [
+        {
+          id: 'scheme-operations-night-2018',
+          name: 'Ночной график 2/2',
+          effectiveFrom: new Date('2018-05-01'),
+          effectiveTo: new Date('2020-03-31'),
+        },
+        {
+          id: 'scheme-operations-flex-2020',
+          name: 'Гибкий график',
+          effectiveFrom: new Date('2020-04-01'),
+          effectiveTo: new Date('2022-12-31'),
+        },
+      ],
     },
     skills: [
       {
@@ -1119,7 +1265,10 @@ const INITIAL_EMPLOYEES: Employee[] = [
       },
       personnelNumber: 'PN-010',
       actualAddress: 'г. Бишкек, пр. Чуй 142',
-      tasks: ['Оптимизация расписаний', 'Ведение отчётности по загрузке'],
+      tasks: createSeedTasks(
+        ['Оптимизация расписаний', 'Ведение отчётности по загрузке'],
+        '2024-02-02T16:20:00Z'
+      ),
     },
 ];
 
@@ -1128,6 +1277,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<string>('list');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [focusEmployeeId, setFocusEmployeeId] = useState<string | null>(null);
+  const quickAddTriggerRef = useRef<HTMLElement | null>(null);
 
   const teams: Team[] = useMemo(() => {
     const unique = new Map<string, Team>();
@@ -1142,12 +1292,26 @@ const App: React.FC = () => {
   }, []);
 
   const handleQuickAddOpen = useCallback(() => {
+    const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
+    quickAddTriggerRef.current = activeElement instanceof HTMLElement ? activeElement : null;
     setIsQuickAddOpen(true);
     setCurrentView('list');
   }, []);
 
-  const handleQuickAddClose = useCallback(() => {
+  const handleQuickAddClose = useCallback((options?: { restoreFocus?: boolean }) => {
     setIsQuickAddOpen(false);
+    const shouldRestoreFocus = options?.restoreFocus !== false;
+    const trigger = quickAddTriggerRef.current;
+    quickAddTriggerRef.current = null;
+    if (shouldRestoreFocus && trigger && trigger.isConnected) {
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          trigger.focus();
+        });
+      } else {
+        trigger.focus();
+      }
+    }
   }, []);
 
   const handleQuickAddSubmit = useCallback((draft: Omit<Employee, 'id' | 'metadata'>) => {
@@ -1170,6 +1334,18 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as typeof window & { __openQuickAdd?: () => void }).__openQuickAdd = handleQuickAddOpen;
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as typeof window & { __openQuickAdd?: () => void }).__openQuickAdd;
+      }
+    };
+  }, [handleQuickAddOpen]);
+
+  useEffect(() => {
     if (!focusEmployeeId) {
       return undefined;
     }
@@ -1179,11 +1355,11 @@ const App: React.FC = () => {
 
   const views = [
     { id: 'list', label: 'Список сотрудников', icon: '📋' },
-    { id: 'gallery', label: 'Фото галерея (демо)', icon: '🖼️' },
-    { id: 'performance', label: 'Показатели (демо)', icon: '📈' },
-    { id: 'statusManager', label: 'Статусы (демо)', icon: '✅' },
-    { id: 'certifications', label: 'Сертификации (демо)', icon: '🎓' },
-    { id: 'skills', label: 'Навыки (демо)', icon: '🎯' },
+    { id: 'gallery', label: 'Фото галерея', icon: '🖼️' },
+    { id: 'performance', label: 'Показатели', icon: '📈' },
+    { id: 'statusManager', label: 'Статусы', icon: '✅' },
+    { id: 'certifications', label: 'Сертификации', icon: '🎓' },
+    { id: 'skills', label: 'Навыки', icon: '🎯' },
   ];
 
   return (

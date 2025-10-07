@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Employee, Team } from '../types/employee';
+import useFocusTrap from '../hooks/useFocusTrap';
+import { createTaskEntry } from '../utils/task';
 
 interface QuickAddEmployeeProps {
   teams: Team[];
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (options?: { restoreFocus?: boolean }) => void;
   onSubmit: (employee: Omit<Employee, 'id' | 'metadata'>) => void;
 }
 
@@ -96,7 +98,10 @@ const buildEmployeePayload = (login: string, password: string, team: Team): Omit
     certifications: [],
     personnelNumber: `PN-${timestamp.toString().slice(-5)}`,
     actualAddress: displayTeam.description ? `Офис ${displayTeam.description}` : 'Офис 1010.ru, ул. Токтогула 12',
-    tasks: ['Проверка учётных данных', 'Назначение наставника'],
+    tasks: [
+      createTaskEntry('Проверка учётных данных', 'system', { createdBy: 'system' }),
+      createTaskEntry('Назначение наставника', 'system', { createdBy: 'system' }),
+    ],
   };
 };
 
@@ -106,6 +111,9 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({ teams, isOpen, onCl
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<{ login?: string; password?: string; confirm?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const headingId = useId();
+  const descriptionId = useId();
 
   const defaultTeam = useMemo(() => teams[0] ?? FALLBACK_TEAM, [teams]);
 
@@ -118,6 +126,15 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({ teams, isOpen, onCl
       setIsSubmitting(false);
     }
   }, [isOpen]);
+
+  useFocusTrap(containerRef, {
+    enabled: isOpen,
+    onEscape: () => {
+      if (!isSubmitting) {
+        onClose({ restoreFocus: true });
+      }
+    },
+  });
 
   if (!isOpen) {
     return null;
@@ -161,23 +178,37 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({ teams, isOpen, onCl
       const payload = buildEmployeePayload(trimmedLogin, password.trim(), defaultTeam);
       await new Promise((resolve) => setTimeout(resolve, 200));
       onSubmit(payload);
-      onClose();
+      onClose({ restoreFocus: false });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-white rounded-xl max-w-md w-full shadow-2xl">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={headingId}
+      aria-describedby={descriptionId}
+    >
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        className="bg-white rounded-xl max-w-md w-full shadow-2xl"
+      >
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Быстрое добавление сотрудника</h2>
-            <p className="text-sm text-gray-500">Создавайте черновик карточки: только логин и пароль — как в WFM.</p>
+            <h2 id={headingId} className="text-lg font-semibold text-gray-900">
+              Быстрое добавление сотрудника
+            </h2>
+            <p id={descriptionId} className="text-sm text-gray-500">
+              Создавайте черновик карточки: только логин и пароль — как в WFM.
+            </p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onClose({ restoreFocus: true })}
             className="text-gray-400 hover:text-gray-600"
             aria-label="Закрыть быстрое добавление"
             disabled={isSubmitting}
@@ -249,7 +280,7 @@ const QuickAddEmployee: React.FC<QuickAddEmployeeProps> = ({ teams, isOpen, onCl
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => onClose({ restoreFocus: true })}
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={isSubmitting}
             >

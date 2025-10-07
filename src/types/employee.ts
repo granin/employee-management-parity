@@ -45,6 +45,7 @@ export interface EmployeeOrgPlacement {
   timeZone: string;
   hourNorm: number;
   workScheme?: WorkSchemeAssignment;
+  workSchemeHistory?: WorkSchemeAssignment[];
 }
 
 export interface Team {
@@ -132,6 +133,17 @@ export interface EmployeeMetadata {
   createdBy: string;
   lastModifiedBy: string;
   lastLogin?: Date;
+  previousStatus?: EmployeeStatus;
+}
+
+export type TaskSource = 'manual' | 'bulk-edit' | 'system';
+
+export interface EmployeeTask {
+  id: string;
+  message: string;
+  createdAt: Date;
+  createdBy: string;
+  source: TaskSource;
 }
 
 export interface Employee {
@@ -151,7 +163,7 @@ export interface Employee {
   metadata: EmployeeMetadata;
   personnelNumber?: string;
   actualAddress?: string;
-  tasks?: string[];
+  tasks?: EmployeeTask[];
 }
 
 export interface EmployeeFilters {

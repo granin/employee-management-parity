@@ -8,7 +8,10 @@
 │   ├── AGENT_PARITY_REPORT.md
 │   ├── EMPLOYEE_MANAGEMENT_PARITY_PLAN.md
 │   ├── SCREENSHOT_INDEX.md
-│   └── SESSION_HANDOFF.md
+│   ├── SESSION_HANDOFF.md
+│   ├── SESSION_SUMMARY.md
+│   ├── TODO_AGENT.md
+│   └── ENVIRONMENT_FIX_TODO.md
 ├── playwright.config.ts
 ├── src/
 │   ├── App.tsx
@@ -17,8 +20,12 @@
 │   │   ├── EmployeeEditDrawer.tsx
 │   │   ├── QuickAddEmployee.tsx
 │   │   └── demo-only modules (PhotoGallery, Performance, etc.)
-│   └── types/
-│       └── employee.ts
+│   ├── hooks/
+│   │   └── useFocusTrap.ts
+│   ├── types/
+│   │   └── employee.ts
+│   └── utils/
+│       └── task.ts
 ├── tests/
 │   └── employee-list.spec.ts
 ├── package.json
