@@ -51,7 +51,6 @@ type ColumnKey = typeof COLUMN_ORDER[number]['key'];
 
 const COLUMN_STORAGE_KEY = 'employee-list:columns';
 const FILTER_STORAGE_KEY = 'employee-list:filters';
-const TAG_CATALOG_STORAGE_KEY = 'employee-list:tag-catalog';
 
 const createDefaultFilters = (): EmployeeFilters => ({
   search: '',
@@ -100,57 +99,18 @@ const IMPORT_CONFIG: Record<string, { extensions: string[]; appendix: string }> 
   Навыки: { extensions: ['csv', 'xlsx'], appendix: 'Appendix 3' },
   Отпуска: { extensions: ['csv'], appendix: 'Appendix 5' },
   'Смены предпочтений': { extensions: ['csv'], appendix: 'Appendix 4' },
-  Схемы: { extensions: ['csv'], appendix: 'Appendix 8' },
+  Схемы: { extensions: ['csv'], appendix: 'Appendix 5' },
   Теги: { extensions: ['csv'], appendix: 'Appendix 6' },
 };
 
-const IMPORT_HEADINGS: Record<string, string> = {
-  Сотрудника: 'Импорт сотрудников',
-  Навыки: 'Импорт навыков',
-  Отпуска: 'Импорт отпусков',
-  'Смены предпочтений': 'Импорт смен предпочтений',
-  Схемы: 'Импорт схем',
-  Теги: 'Импорт тегов',
-};
-
-const EXPORT_META: Record<string, { heading: string; description: string; filePrefix: string }> = {
-  'CSV (текущие колонки)': {
-    heading: 'Экспорт сотрудников',
-    description: 'Файл учитывает выбранные колонки и активные фильтры.',
-    filePrefix: 'employees_export',
-  },
-  Отпуска: {
-    heading: 'Экспорт отпусков',
-    description: 'Выгрузка сотрудников со статусом «В отпуске».',
-    filePrefix: 'employees_vacations',
-  },
-  Теги: {
-    heading: 'Экспорт тегов',
-    description: 'Список логинов и назначенных тегов.',
-    filePrefix: 'employees_tags',
-  },
+const EXPORT_FILE_TITLES: Record<string, string> = {
+  'CSV (текущие колонки)': 'employees_export',
+  Отпуска: 'employees_vacations',
+  Теги: 'employees_tags',
 };
 
 const IMPORT_REQUIRED_HEADERS: Record<string, string[]> = {
-  Сотрудника: [
-    'login',
-    'lastName',
-    'firstName',
-    'email',
-    'hiringDate',
-    'office',
-    'groupExternalId',
-    'positionExternalId',
-    'telephonyId',
-    'personnelNumber',
-    'schemeExternalId',
-    'calendarExternalId',
-    'timeZone',
-  ],
-  Навыки: ['login', 'skill', 'start', 'end', 'priority'],
   Отпуска: ['login', 'ФИО', 'Статус', 'Команда', 'Комментарий'],
-  'Смены предпочтений': ['login', 'activityId', 'start', 'end', 'timeZone'],
-  Схемы: ['login', 'id', 'start', 'end'],
   Теги: ['login', 'ФИО', 'Тег'],
 };
 
@@ -204,34 +164,6 @@ const FIELD_ACTION_CONFIG: Record<keyof Omit<BulkEditMatrixState, 'comment'>, Ma
 
 const MAX_TAGS_PER_EMPLOYEE = 4;
 
-const loadStoredTagCatalog = (): Record<string, string> => {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const stored = window.localStorage.getItem(TAG_CATALOG_STORAGE_KEY);
-    if (!stored) {
-      return {};
-    }
-    const parsed = JSON.parse(stored);
-    if (parsed && typeof parsed === 'object') {
-      return Object.entries(parsed as Record<string, unknown>).reduce((acc, [tag, color]) => {
-        if (typeof color === 'string' && color.trim()) {
-          acc[tag] = color;
-        } else {
-          acc[tag] = getColorForTag(tag);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-    }
-  } catch (error) {
-    console.error('Не удалось загрузить сохранённый каталог тегов', error);
-  }
-
-  return {};
-};
-
 const generateId = () =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -282,7 +214,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
   const [showTagManager, setShowTagManager] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
   const [tagCreationError, setTagCreationError] = useState<string | null>(null);
-  const [tagCatalog, setTagCatalog] = useState<Record<string, string>>(() => loadStoredTagCatalog());
+  const [tagCatalog, setTagCatalog] = useState<Record<string, string>>({});
   const [tagAction, setTagAction] = useState<MatrixAction>('add');
   const [selectedTagNames, setSelectedTagNames] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
@@ -324,33 +256,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     }`;
   const toolbarPrimaryButtonClass =
     'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white text-sm font-medium transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500';
-
-  useEffect(() => {
-    setTagCatalog((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      employees.forEach((emp) => {
-        emp.tags.forEach((tag) => {
-          if (!next[tag]) {
-            next[tag] = getColorForTag(tag);
-            changed = true;
-          }
-        });
-      });
-      return changed ? next : prev;
-    });
-  }, [employees]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      window.localStorage.setItem(TAG_CATALOG_STORAGE_KEY, JSON.stringify(tagCatalog));
-    } catch (error) {
-      console.error('Не удалось сохранить каталог тегов', error);
-    }
-  }, [tagCatalog]);
 
   const storeFocusedControl = () => {
     const activeElement = document.activeElement;
@@ -663,6 +568,16 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       setTagCreationError(null);
       return;
     }
+
+    const catalog: Record<string, string> = {};
+    employees.forEach((emp) => {
+      emp.tags.forEach((tag) => {
+        if (!catalog[tag]) {
+          catalog[tag] = getColorForTag(tag);
+        }
+      });
+    });
+    setTagCatalog(catalog);
 
     const selectedList = employees.filter((emp) => selectedEmployees.has(emp.id));
     if (selectedList.length > 0) {
@@ -1392,17 +1307,10 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     restoreRowFocus();
   };
 
-  const handleDrawerSave = async (updatedEmployee: Employee) => {
+  const handleDrawerSave = (updatedEmployee: Employee) => {
     onEmployeesChange((prev) =>
       prev.map((emp) => (emp.id === updatedEmployee.id ? { ...updatedEmployee } : emp))
     );
-
-    const fullName = `${updatedEmployee.personalInfo.lastName} ${updatedEmployee.personalInfo.firstName}`.trim();
-    const displayName = fullName || updatedEmployee.credentials.wfmLogin;
-    const successMessage = `Данные сотрудника ${displayName} сохранены.`;
-    setStatusNotice(successMessage);
-    setLiveMessage(`Изменения сохранены для ${displayName}`);
-    setSelectionOverrideExpires(Date.now() + 4000);
     setActiveEmployeeId(updatedEmployee.id);
   };
 
@@ -1688,14 +1596,9 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       ? employees.filter((emp) => selectedEmployees.has(emp.id))
       : sortedEmployees;
 
-    const exportMeta = EXPORT_META[exportContext] ?? {
-      heading: `Экспорт «${exportContext}»`,
-      description: '',
-      filePrefix: 'employees_export',
-    };
-
-    const downloadCsv = (csv: string) => {
-      const fileName = `${exportMeta.filePrefix}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const downloadCsv = (csv: string, context: string) => {
+      const base = EXPORT_FILE_TITLES[context] ?? 'employees_export';
+      const fileName = `${base}_${new Date().toISOString().slice(0, 10)}.csv`;
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1704,10 +1607,10 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       link.click();
       URL.revokeObjectURL(url);
 
-      const successMessage = `${exportMeta.heading} завершён. Файл «${fileName}» сохранён.`;
+      const successMessage = `Экспорт завершён. Раздел: ${context}. Файл «${fileName}» сохранён.`;
       setExportFeedback(successMessage);
       setStatusNotice(successMessage);
-      setLiveMessage(`Экспорт выполнен: ${exportMeta.heading}`);
+      setLiveMessage(`Экспорт выполнен: ${context}`);
       setSelectionOverrideExpires(Date.now() + 4000);
     };
 
@@ -1728,16 +1631,15 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
         ));
 
       if (rows.length === 0) {
-        const message = `${exportMeta.heading}: нет данных для выгрузки.`;
-        setExportFeedback(message);
-        setStatusNotice(message);
-        setLiveMessage(`${exportMeta.heading}: нет данных`);
+        setExportFeedback('Нет сотрудников в отпуске для выгрузки.');
+        setStatusNotice('Нет данных для экспорта «Отпуска».');
+        setLiveMessage('Экспорт «Отпуска»: нет данных');
         setSelectionOverrideExpires(Date.now() + 4000);
         return;
       }
 
       const csv = [header.join(','), ...rows].join('\n');
-      downloadCsv(csv);
+      downloadCsv(csv, exportContext);
       return;
     }
 
@@ -1755,16 +1657,15 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
       );
 
       if (rows.length === 0) {
-        const message = `${exportMeta.heading}: нет данных для выгрузки.`;
-        setExportFeedback(message);
-        setStatusNotice(message);
-        setLiveMessage(`${exportMeta.heading}: нет данных`);
+        setExportFeedback('У выбранных сотрудников отсутствуют теги для экспорта.');
+        setStatusNotice('Нет данных для экспорта «Теги».');
+        setLiveMessage('Экспорт «Теги»: нет данных');
         setSelectionOverrideExpires(Date.now() + 4000);
         return;
       }
 
       const csv = [header.join(','), ...rows].join('\n');
-      downloadCsv(csv);
+      downloadCsv(csv, exportContext);
       return;
     }
 
@@ -1798,7 +1699,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     );
 
     const csv = [header, ...rows].join('\n');
-    downloadCsv(csv);
+    downloadCsv(csv, exportContext);
   };
 
   const hasActiveFilters = useMemo(() => {
@@ -1849,60 +1750,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     return Array.from(tags).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [employees, selectedEmployees]);
 
-  const joinValues = useCallback((values: string[]) => {
-    if (values.length === 0) {
-      return '';
-    }
-    if (values.length <= 3) {
-      return values.join(', ');
-    }
-    return `${values.slice(0, 3).join(', ')} и ещё ${values.length - 3}`;
-  }, []);
-
-  const matrixSummary = useMemo(() => {
-    const summary: string[] = [];
-    const { status, team, hourNorm, workScheme, skills, reserveSkills, tags, comment } = bulkEditMatrix;
-
-    if (status.action !== 'none' && status.value) {
-      const statusLabel = STATUS_LABELS[status.value as EmployeeStatus] ?? status.value;
-      summary.push(`Статус → ${statusLabel}`);
-    }
-
-    if (team.action !== 'none' && team.value) {
-      const teamName = teamLookup.get(team.value)?.name ?? team.value;
-      summary.push(`Команда → ${teamName}`);
-    }
-
-    if (hourNorm.action !== 'none' && hourNorm.value) {
-      summary.push(`Норма часов → ${hourNorm.value}`);
-    }
-
-    if (workScheme.action === 'remove') {
-      summary.push('Схема работы будет снята');
-    } else if (workScheme.action !== 'none' && workScheme.value) {
-      const schemeName = schemeLookup.get(workScheme.value)?.name ?? workScheme.value;
-      summary.push(`Схема работы → ${schemeName}`);
-    }
-
-    if (skills.action !== 'none' && skills.value.length > 0) {
-      summary.push(`Навыки — ${MATRIX_ACTION_LABELS[skills.action]} (${joinValues(skills.value)})`);
-    }
-
-    if (reserveSkills.action !== 'none' && reserveSkills.value.length > 0) {
-      summary.push(`Резервные навыки — ${MATRIX_ACTION_LABELS[reserveSkills.action]} (${joinValues(reserveSkills.value)})`);
-    }
-
-    if (tags.action !== 'none' && tags.value.length > 0) {
-      summary.push(`Теги — ${MATRIX_ACTION_LABELS[tags.action]} (${joinValues(tags.value)})`);
-    }
-
-    if (comment.trim()) {
-      summary.push('Комментарий будет добавлен в таймлайн задач.');
-    }
-
-    return summary;
-  }, [bulkEditMatrix, joinValues, schemeLookup, teamLookup]);
-
   const bulkEditButtonTitle = !isSelectionMode
     ? 'Включить режим выбора для массового редактирования'
     : selectedEmployees.size === 0
@@ -1933,22 +1780,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
     enabled: showExportModal,
     onEscape: closeExportModal,
   });
-
-  const importMeta = IMPORT_CONFIG[importContext];
-  const importHeading = IMPORT_HEADINGS[importContext] ?? `Импорт «${importContext}»`;
-  const importGuidance = [
-    importMeta?.appendix
-      ? `Скачайте и заполните шаблон ${importMeta.appendix} для раздела «${importContext}».`
-      : `Подготовьте файл для раздела «${importContext}».`,
-    'Проверьте форматы дат и соответствие справочникам системы.',
-    'Загрузите файл: предварительная проверка выполнится на фронте, итоговая загрузка — после подключения бэкенда.',
-  ];
-
-  const exportMetaForView = EXPORT_META[exportContext] ?? {
-    heading: `Экспорт «${exportContext}»`,
-    description: '',
-    filePrefix: 'employees_export',
-  };
 
   return (
     <>
@@ -2493,7 +2324,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="bulk-edit-heading"
-            aria-describedby="bulk-edit-summary"
             className="ml-auto h-full w-full max-w-2xl bg-white shadow-xl flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
@@ -2523,10 +2353,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                   </div>
                 )}
 
-                <div
-                  id="bulk-edit-summary"
-                  className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900"
-                >
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
                   Отметьте действие «Добавить / Заменить / Удалить» для нужных полей. Значения будут применены ко всем выбранным сотрудникам.
                 </div>
 
@@ -2788,29 +2615,18 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                 </div>
 
                 {selectedEmployeeList.length > 0 && (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-gray-900">Выбранные сотрудники</p>
-                      <span className="text-xs text-gray-500">Всего: {selectedEmployeeList.length}</span>
-                    </div>
-                    <ul className="space-y-1 max-h-40 overflow-y-auto">
-                      {selectedEmployeeList.map((emp) => (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                    <p className="font-medium text-gray-900 mb-2">Выбранные сотрудники</p>
+                    <ul className="space-y-1 max-h-36 overflow-y-auto">
+                      {selectedEmployeeList.slice(0, 8).map((emp) => (
                         <li key={emp.id} className="flex items-center justify-between gap-3">
                           <span>{emp.personalInfo.lastName} {emp.personalInfo.firstName}</span>
                           <span className="text-xs text-gray-500">{emp.workInfo.team.name}</span>
                         </li>
                       ))}
-                    </ul>
-                  </div>
-                )}
-
-                {matrixSummary.length > 0 && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 space-y-2">
-                    <p className="font-medium">Предстоящие изменения</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {matrixSummary.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
+                      {selectedEmployeeList.length > 8 && (
+                        <li className="text-xs text-gray-500">и ещё {selectedEmployeeList.length - 8}…</li>
+                      )}
                     </ul>
                   </div>
                 )}
@@ -2845,7 +2661,6 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="column-settings-heading"
-            aria-describedby="column-settings-description"
             className="ml-auto h-full w-full max-w-sm bg-white shadow-xl flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
@@ -2871,9 +2686,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               </button>
             </div>
             <div className="px-5 py-3 border-b border-gray-100">
-              <p id="column-settings-description" className="text-sm text-gray-500">
-                Выберите поля для отображения в таблице сотрудников.
-              </p>
+              <p className="text-sm text-gray-500">Выберите поля для отображения в таблице сотрудников.</p>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {COLUMN_ORDER.map((column) => (
@@ -2928,14 +2741,13 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="tag-manager-heading"
-            aria-describedby="tag-manager-description"
             className="bg-white rounded-xl max-w-lg w-full shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
                 <h3 id="tag-manager-heading" className="text-lg font-semibold text-gray-900">Управление тегами</h3>
-                <p id="tag-manager-description" className="text-sm text-gray-500">См. Appendix 6 — Tag Import Template</p>
+                <p className="text-sm text-gray-500">См. Appendix 6 — Tag Import Template</p>
               </div>
               <button
                 type="button"
@@ -2973,7 +2785,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-gray-500" aria-live="polite">
+              <p className="text-xs text-gray-500">
                 {tagAction === 'add' && `Добавление новых тегов не превысит лимит в ${MAX_TAGS_PER_EMPLOYEE} на сотрудника.`}
                 {tagAction === 'replace' && 'Новый набор заменит текущие теги выбранных сотрудников.'}
                 {tagAction === 'remove' && 'Отметьте теги, которые нужно снять у сотрудников.'}
@@ -3020,11 +2832,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                   >
                     Создать тег
                   </button>
-                  {tagCreationError && (
-                    <span className="text-xs text-red-600" role="alert">
-                      {tagCreationError}
-                    </span>
-                  )}
+                  {tagCreationError && <span className="text-xs text-red-600">{tagCreationError}</span>}
                 </div>
               </div>
 
@@ -3091,11 +2899,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
                 </div>
               )}
 
-              {tagError && (
-                <p className="text-xs text-red-600" role="alert">
-                  {tagError}
-                </p>
-              )}
+              {tagError && <p className="text-xs text-red-600">{tagError}</p>}
 
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600 space-y-1">
                 <p className="font-semibold text-gray-700">Подсказка</p>
@@ -3138,16 +2942,13 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="import-modal-heading"
-            aria-describedby="import-modal-description"
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
-                <h3 id="import-modal-heading" className="text-lg font-semibold text-gray-900">{importHeading}</h3>
-                <p id="import-modal-description" className="text-sm text-gray-500">
-                  {importMeta?.appendix ? `Шаблон: ${importMeta.appendix}` : 'Подготовьте файл перед загрузкой'}
-                </p>
+                <h3 id="import-modal-heading" className="text-lg font-semibold text-gray-900">Импорт сотрудников</h3>
+                <p className="text-sm text-gray-500">Шаблоны: Appendix 1/3/4/8</p>
               </div>
               <button
                 type="button"
@@ -3161,9 +2962,9 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
               <p className="text-gray-500">Выбран раздел: <span className="font-medium text-gray-700">{importContext}</span></p>
               <ol className="list-decimal list-inside space-y-1">
-                {importGuidance.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
+                <li>Скачайте и заполните шаблон (Appendix 1 — сотрудники, Appendix 3 — навыки, Appendix 4 — активности, Appendix 8 — схемы).</li>
+                <li>Проверьте форматы дат и соответствие справочникам системы.</li>
+                <li>Загрузите файл: предварительная проверка выполнится на фронте, итоговая загрузка — после подключения бэкенда.</li>
               </ol>
               <button
                 type="button"
@@ -3172,11 +2973,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               >
                 Выбрать файл
               </button>
-              {importFeedback && (
-                <p className="text-sm text-blue-700" role="status" aria-live="polite">
-                  {importFeedback}
-                </p>
-              )}
+              {importFeedback && <p className="text-sm text-blue-700">{importFeedback}</p>}
             </div>
           </div>
         </div>
@@ -3191,16 +2988,13 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="export-modal-heading"
-            aria-describedby="export-modal-description"
             className="bg-white rounded-xl max-w-xl w-full shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div>
-                <h3 id="export-modal-heading" className="text-lg font-semibold text-gray-900">{exportMetaForView.heading}</h3>
-                <p id="export-modal-description" className="text-sm text-gray-500">
-                  {exportMetaForView.description || 'Скачать данные в формате CSV'}
-                </p>
+                <h3 id="export-modal-heading" className="text-lg font-semibold text-gray-900">Экспорт списка сотрудников</h3>
+                <p className="text-sm text-gray-500">Учёт активных колонок и фильтров</p>
               </div>
               <button
                 type="button"
@@ -3224,11 +3018,7 @@ const EmployeeListContainer: React.FC<EmployeeListContainerProps> = ({
               >
                 Скачать CSV
               </button>
-              {exportFeedback && (
-                <p className="text-sm text-blue-700" role="status" aria-live="polite">
-                  {exportFeedback}
-                </p>
-              )}
+              {exportFeedback && <p className="text-sm text-blue-700">{exportFeedback}</p>}
             </div>
           </div>
         </div>
