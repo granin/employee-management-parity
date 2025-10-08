@@ -81,9 +81,21 @@ Manual references: CH3 Employees, CH5 Schedule (Advanced, Shifts, Build), screen
 
 15. **Phase 6 – Migration Planning**
     - Tracker: `docs/Tasks/phase-6-migration-planning-prd.md`.
-    - Focus areas: formalise wrapper APIs (Radix dialog/popover, TanStack table, RHF+Zod forms), stage-by-stage migration roadmap, validation/rollback guardrails.
-    - Prep references: `migration-prep/README.md`, `MANIFEST.md`, wrapper prototypes under `migration-prep/wrappers-draft/`, playground demos, `migration-prep/ACCESSIBILITY_CHECKLIST.md`.
-    - Kick off once Phase 5 ships; migration plan should lock validation cadence (Playwright + NVDA) and document bundle/performance checkpoints.
+    - Focus areas: formalise token contract + wrapper APIs (Radix dialog/popover, RHF+Zod forms, TanStack table), stage-by-stage migration roadmap, validation/rollback guardrails.
+    - Status: Stage 0 complete (tokens + wrapper smoke tests). Stage 1 overlays now run through the shared `Overlay` helper behind `VITE_USE_RADIX_OVERLAYS` for Quick Add, EmployeeEditDrawer, bulk edit, tag manager, import/export, and column settings; toolbar import/export menus are backed by the Radix popover. Stage 2 forms are in place for both Quick Add and the Employee edit drawer (RHF + Zod); NVDA remains deferred until hardware is available, so log “pending hardware” in the handoff/TODO. Stage 3 complete — TanStack table is now enabled by default (`src/utils/featureFlags.ts` defaults to `true`), the 12 k row baseline is logged (dist `index-*.js` ≈ 550.6 KB / 152.1 KB gzip), and both legacy and flag Playwright suites (`npm run test`, `npm run test:tanstack -- --grep "Employee list"`) pass. Stage 4 promotes the shared `Button` wrapper for quick-add, bulk-edit, tag manager, column settings, and import/export CTAs; dnd-kit sortable evaluation still pending.
+    - Prep references: `migration-prep/README.md`, `MANIFEST.md`, wrapper prototypes now promoted to `src/wrappers/`, playground demos, `migration-prep/ACCESSIBILITY_CHECKLIST.md`.
+    - Kick off once Phase 5 ships; migration plan locks validation cadence (Playwright + NVDA) and documents bundle/performance checkpoints + env flags.
+
+16. **Phase 7 – Component Library Hardening (upcoming)**
+    - Objective: promote the hardened wrappers into a shared component library consumable by Schedule/Reporting modules.
+    - Scope: finalise wrapper APIs, add usage docs/tests, decide on packaging (internal module vs publishable package), and define integration guidance.
+    - Dependencies: completion of Phase 6, deferred VoiceOver/NVDA sweeps (hardware available), and product buy-in on rollout strategy.
+
+## Someday / Maybe
+17. **Table layout surface area review**
+    - Question: once the wrapper migration is stable, do we want an alternate table layout that stretches to full-width on desktop to avoid the horizontal scrollbar at 1440 px+ viewports?
+    - Rationale: current parity intentionally matches the legacy screenshot with horizontal scrolling; revisit only if UX feedback demands full-width presentation.
+    - Notes: defer until after Phase 6 deploys and AI UAT confirms wrapper parity; no action needed today.
 
 ## Completed (06 Oct 2025)
 - Seeded realistic employee dataset with extended fields.
