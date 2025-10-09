@@ -3,6 +3,7 @@
 Manual references: CH3 Employees, CH5 Schedule (Advanced, Shifts, Build), screenshots `image5.png`, `image8.png`, `image13.png`, `image171.png`, `image180.png`.
 
 ## Phase 1 – Bulk Edit Enhancements (Severity A/B)
+Detailed playbook: `docs/Tasks/bulk-edit-phase-1.md`.
 1. **Matrix actions (Add/Replace/Delete)**
    - Update `src/components/EmployeeListContainer.tsx`, `src/types/employee.ts`, `tests/employee-list.spec.ts`.
    - Match manual `рис.23.11–23.13`: provide controls per field for “Добавить всем / Заменить всем / Удалить всем”.
